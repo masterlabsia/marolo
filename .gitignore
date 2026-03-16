@@ -22,14 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.mcp.json
-.ROADMAP.md
-.README.md
-.QUICKSTART.md
-.backend/README.md
-.backend/QUICKSTART.md
-.frontend/README.md
-.frontend/QUICKSTART.md
+mcp.json
+ROADMAP.md
+README.md
+QUICKSTART.md
+backend/README.md
+backend/QUICKSTART.md
+frontend/README.md
+frontend/QUICKSTART.md
 
 # Environment variables
 .env
