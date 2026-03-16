@@ -8,6 +8,10 @@ function isMissingTableError(error: unknown) {
   return err?.status === 404 || err?.code === "42P01" || err?.message?.toLowerCase().includes("relation");
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export function useProfile() {
   const { user } = useAuth();
 
@@ -17,6 +21,34 @@ export function useProfile() {
     retry: false,
     queryFn: async () => {
       if (!user) return null;
+      const fallbackRole: Papel = user.role === "admin" ? "presidente" : "jogador";
+
+      // Modo login fixo (admin/jogador): user.id nao e UUID.
+      // Neste modo usamos o primeiro perfil como fallback para destravar a UI.
+      if (!isUuid(user.id)) {
+        const first = await supabase
+          .from("perfis")
+          .select("*")
+          .limit(1)
+          .maybeSingle<Perfil>();
+
+        if (first.error) {
+          if (isMissingTableError(first.error)) {
+            return {
+              perfil: null,
+              role: fallbackRole,
+              schemaMissing: true,
+            };
+          }
+          throw first.error;
+        }
+
+        return {
+          perfil: first.data ?? null,
+          role: fallbackRole,
+          schemaMissing: false,
+        };
+      }
 
       const own = await supabase
         .from("perfis")
