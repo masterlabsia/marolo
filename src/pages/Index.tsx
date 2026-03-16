@@ -101,7 +101,11 @@ const Index = () => {
       <AppShell>
         <div className="max-w-xl glass-card">
           <h1 className="text-2xl font-bold">Nenhum time cadastrado</h1>
-          <p className="text-sm text-muted-foreground mt-2">Nenhum time no sistema. Contate o administrador para configurar.</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {profileData?.schemaMissing
+              ? "Schema do Supabase ainda nao foi aplicado. Execute backend/src/db/schema.sql no SQL Editor do Supabase."
+              : "Nenhum time no sistema. Contate o administrador para configurar."}
+          </p>
         </div>
       </AppShell>
     );

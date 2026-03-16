@@ -3,32 +3,77 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import type { Papel, Perfil } from "@/types/domain";
 
+function isMissingTableError(error: unknown) {
+  const err = error as { status?: number; code?: string; message?: string };
+  return err?.status === 404 || err?.code === "42P01" || err?.message?.toLowerCase().includes("relation");
+}
+
 export function useProfile() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["profile", user?.id, user?.role],
+    queryKey: ["profile", user?.id],
     enabled: Boolean(user?.id),
-    retry: (failureCount, error: unknown) => {
-      const err = error as { status?: number; code?: string };
-      if (err?.status === 404 || err?.code === "42P01" || (err as any)?.message?.includes("relation") || failureCount >= 2) return false;
-      return failureCount < 2;
-    },
+    retry: false,
     queryFn: async () => {
       if (!user) return null;
 
-      // Login fixo: usar primeiro perfil do Supabase e role do auth
-      const first = await supabase
+      const own = await supabase
         .from("perfis")
         .select("*")
-        .limit(1)
+        .eq("usuario_id", user.id)
         .maybeSingle<Perfil>();
 
-      if (first.error) throw first.error;
-      if (!first.data) return null;
+      if (own.error) {
+        if (isMissingTableError(own.error)) {
+          return {
+            perfil: null,
+            role: "presidente" as Papel,
+            schemaMissing: true,
+          };
+        }
+        throw own.error;
+      }
 
-      const role: Papel = user.role === "admin" ? "presidente" : "jogador";
-      return { perfil: first.data, role };
+      if (own.data) {
+        return {
+          perfil: own.data,
+          role: "presidente" as Papel,
+          schemaMissing: false,
+        };
+      }
+
+      const member = await supabase
+        .from("membros")
+        .select("papel, perfis(*)")
+        .eq("usuario_id", user.id)
+        .limit(1)
+        .maybeSingle<{ papel: Papel; perfis: Perfil }>();
+
+      if (member.error) {
+        if (isMissingTableError(member.error)) {
+          return {
+            perfil: null,
+            role: "jogador" as Papel,
+            schemaMissing: true,
+          };
+        }
+        throw member.error;
+      }
+
+      if (!member.data) {
+        return {
+          perfil: null,
+          role: "jogador" as Papel,
+          schemaMissing: false,
+        };
+      }
+
+      return {
+        perfil: member.data.perfis,
+        role: (member.data.papel ?? "jogador") as Papel,
+        schemaMissing: false,
+      };
     },
   });
 }
