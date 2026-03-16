@@ -1,99 +1,153 @@
-import { motion } from "framer-motion";
-import { CheckCircle2, XCircle, ClipboardCheck } from "lucide-react";
-import Header from "@/components/Layout/Header";
-import BottomNav from "@/components/Layout/BottomNav";
-import { mockPresenceRecords, mockPlayers } from "@/types";
-
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-};
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { type: "spring" as const, duration: 0.4, bounce: 0.15 } },
-};
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import AppShell from "@/components/Layout/AppShell";
+import { useProfile } from "@/hooks/useProfile";
+import { listJogadores, listJogos, listPresencasByJogo, upsertPresenca } from "@/lib/team-api";
 
 const PresencePage = () => {
-  const formatDate = (d: string) =>
-    new Date(d + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  const queryClient = useQueryClient();
+  const { data: profileData } = useProfile();
+  const perfilId = profileData?.perfil?.id;
+  const canManage = profileData?.role === "presidente";
 
-  // Per-player summary
-  const playerSummary = mockPlayers.map((p) => {
-    const total = mockPresenceRecords.length;
-    const present = mockPresenceRecords.filter((r) => r.players.find((pp) => pp.playerId === p.id)?.present).length;
-    return { ...p, total, present, rate: Math.round((present / total) * 100) };
-  }).sort((a, b) => b.rate - a.rate);
+  const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
+
+  const gamesQuery = useQuery({
+    queryKey: ["games", perfilId],
+    enabled: Boolean(perfilId),
+    queryFn: () => listJogos(perfilId as number),
+  });
+
+  const playersQuery = useQuery({
+    queryKey: ["players", perfilId],
+    enabled: Boolean(perfilId),
+    queryFn: () => listJogadores(perfilId as number),
+  });
+
+  const attendanceQuery = useQuery({
+    queryKey: ["attendance", selectedGameId],
+    enabled: Boolean(selectedGameId),
+    queryFn: () => listPresencasByJogo(selectedGameId as number),
+  });
+
+  const upsertMutation = useMutation({
+    mutationFn: upsertPresenca,
+    onSuccess: async () => {
+      toast.success("Presenca atualizada");
+      await queryClient.invalidateQueries({ queryKey: ["attendance", selectedGameId] });
+    },
+    onError: (error: any) => toast.error(error.message || "Erro ao salvar presenca"),
+  });
+
+  const rows = useMemo(() => {
+    const allPlayers = playersQuery.data || [];
+    const recordMap = new Map((attendanceQuery.data || []).map((row) => [row.jogador_id, row]));
+
+    return allPlayers.map((player) => {
+      const existing = recordMap.get(player.id);
+      return {
+        jogador_id: player.id,
+        nome: player.nome,
+        presente: existing?.presente ?? false,
+        gols: existing?.gols ?? 0,
+        assistencias: existing?.assistencias ?? 0,
+        notas: existing?.notas ?? "",
+      };
+    });
+  }, [attendanceQuery.data, playersQuery.data]);
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8">
-      <Header />
-      <main className="relative z-10 px-4 md:px-6 py-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-1">Presença</h1>
-        <p className="text-sm text-muted-foreground mb-8">Controle de frequência nos jogos</p>
+    <AppShell>
+      <h1 className="text-2xl md:text-3xl font-display font-bold">Presenca e Gols</h1>
+      <p className="text-sm text-muted-foreground mb-6">Registro por jogo com atualizacao imediata.</p>
 
-        {/* Player Summary */}
-        <section className="mb-10">
-          <h2 className="text-base font-display font-semibold text-foreground mb-4 flex items-center gap-2">
-            <ClipboardCheck size={18} strokeWidth={1.5} className="text-primary" />
-            Resumo por Jogador
-          </h2>
-          <motion.div className="grid grid-cols-1 sm:grid-cols-2 gap-3" variants={container} initial="hidden" animate="show">
-            {playerSummary.map((p) => (
-              <motion.div key={p.id} variants={item} className="glass-card !p-4 !rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                    <span className="text-xs font-display font-bold text-primary">{p.number}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">{p.present}/{p.total} jogos</p>
-                  </div>
-                </div>
-                <span className={`text-lg font-display font-bold tabular-nums ${
-                  p.rate >= 80 ? "text-success" : p.rate >= 50 ? "text-warning" : "text-destructive"
-                }`}>
-                  {p.rate}%
-                </span>
-              </motion.div>
-            ))}
-          </motion.div>
-        </section>
+      <div className="glass-card mb-4">
+        <label className="text-xs text-muted-foreground">Jogo</label>
+        <select
+          className="mt-1 w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
+          value={selectedGameId ?? ""}
+          onChange={(e) => setSelectedGameId(Number(e.target.value) || null)}
+        >
+          <option value="">Selecione...</option>
+          {(gamesQuery.data || []).map((game) => (
+            <option key={game.id} value={game.id}>
+              {new Date(game.data_hora).toLocaleDateString("pt-BR")} - vs {game.adversario}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* Per-game history */}
-        <section>
-          <h2 className="text-base font-display font-semibold text-foreground mb-4">Histórico por Jogo</h2>
-          <motion.div className="flex flex-col gap-4" variants={container} initial="hidden" animate="show">
-            {mockPresenceRecords.map((record) => {
-              const presentCount = record.players.filter((p) => p.present).length;
-              return (
-                <motion.div key={record.id} variants={item} className="glass-card !rounded-2xl">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-display font-semibold text-foreground text-sm">{record.gameLabel}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(record.date)}</p>
-                    </div>
-                    <span className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-                      {presentCount}/{record.players.length}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {record.players.map((p) => (
-                      <div key={p.playerId} className={`flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-xl ${
-                        p.present ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
-                      }`}>
-                        {p.present ? <CheckCircle2 size={12} strokeWidth={1.5} /> : <XCircle size={12} strokeWidth={1.5} />}
-                        {p.playerName.split(" ")[0]}
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </section>
-      </main>
-      <BottomNav />
-    </div>
+      {selectedGameId && (
+        <div className="glass-card overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border/60 text-muted-foreground">
+              <tr>
+                <th className="text-left py-2">Jogador</th>
+                <th className="text-left py-2">Presente</th>
+                <th className="text-left py-2">Gols</th>
+                <th className="text-left py-2">Assist.</th>
+                <th className="text-left py-2">Notas</th>
+                {canManage && <th className="text-right py-2">Salvar</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <PresenceRow
+                  key={row.jogador_id}
+                  row={row}
+                  canManage={canManage}
+                  onSave={(payload) => {
+                    upsertMutation.mutate({
+                      jogo_id: selectedGameId,
+                      jogador_id: row.jogador_id,
+                      ...payload,
+                    });
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </AppShell>
+  );
+};
+
+const PresenceRow = ({
+  row,
+  canManage,
+  onSave,
+}: {
+  row: { jogador_id: number; nome: string; presente: boolean; gols: number; assistencias: number; notas: string };
+  canManage: boolean;
+  onSave: (payload: { presente: boolean; gols: number; assistencias: number; notas: string }) => void;
+}) => {
+  const [state, setState] = useState(row);
+
+  return (
+    <tr className="border-b border-border/40">
+      <td className="py-2">{row.nome}</td>
+      <td className="py-2">
+        <input disabled={!canManage} type="checkbox" checked={state.presente} onChange={(e) => setState((p) => ({ ...p, presente: e.target.checked }))} />
+      </td>
+      <td className="py-2">
+        <input disabled={!canManage} type="number" min={0} value={state.gols} onChange={(e) => setState((p) => ({ ...p, gols: Number(e.target.value) || 0 }))} className="w-16 rounded-lg bg-muted/40 border border-border px-2 py-1" />
+      </td>
+      <td className="py-2">
+        <input disabled={!canManage} type="number" min={0} value={state.assistencias} onChange={(e) => setState((p) => ({ ...p, assistencias: Number(e.target.value) || 0 }))} className="w-16 rounded-lg bg-muted/40 border border-border px-2 py-1" />
+      </td>
+      <td className="py-2">
+        <input disabled={!canManage} value={state.notas} onChange={(e) => setState((p) => ({ ...p, notas: e.target.value }))} className="rounded-lg bg-muted/40 border border-border px-2 py-1" />
+      </td>
+      {canManage && (
+        <td className="py-2 text-right">
+          <button className="text-xs rounded-lg bg-primary text-primary-foreground px-2 py-1" onClick={() => onSave(state)}>
+            Salvar
+          </button>
+        </td>
+      )}
+    </tr>
   );
 };
 

@@ -1,24 +1,48 @@
-import { Zap, Bell } from "lucide-react";
+import { LogOut, Shield, UserRound, Zap } from "lucide-react";
+import { toast } from "sonner";
 import DesktopNav from "./DesktopNav";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 
 const Header = () => {
+  const { signOut } = useAuth();
+  const { data } = useProfile();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao sair");
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="flex items-center justify-between px-4 md:px-6 h-16 max-w-7xl mx-auto">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <Zap size={24} strokeWidth={1.5} className="text-primary" />
-            <span className="text-lg font-display font-bold text-foreground tracking-tight">Marolo</span>
+      <div className="flex items-center justify-between px-4 md:px-6 h-16 max-w-7xl mx-auto gap-4">
+        <div className="flex items-center gap-6 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Zap size={22} strokeWidth={1.5} className="text-primary" />
+            <div className="truncate">
+              <p className="text-base font-display font-bold text-foreground tracking-tight truncate">
+                {data?.perfil?.nome_time || "Marolo"}
+              </p>
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{data?.role || "visitante"}</p>
+            </div>
           </div>
           <DesktopNav />
         </div>
+
         <div className="flex items-center gap-2">
-          <button className="p-2 rounded-xl hover:bg-muted/50 transition-colors">
-            <Bell size={20} strokeWidth={1.5} className="text-muted-foreground" />
+          <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted/40 text-xs text-muted-foreground">
+            {data?.role === "presidente" ? <Shield size={12} /> : <UserRound size={12} />} {data?.role || "-"}
+          </span>
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-xl hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+            title="Sair"
+          >
+            <LogOut size={18} strokeWidth={1.5} />
           </button>
-          <div className="w-8 h-8 rounded-full bg-primary/20 ring-2 ring-primary/30 flex items-center justify-center">
-            <span className="text-xs font-display font-bold text-primary">M</span>
-          </div>
         </div>
       </div>
     </header>

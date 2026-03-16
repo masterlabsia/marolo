@@ -1,97 +1,132 @@
-import { motion } from "framer-motion";
-import { Trophy, MapPin, Clock, CheckCircle2, XCircle, Minus } from "lucide-react";
-import Header from "@/components/Layout/Header";
-import BottomNav from "@/components/Layout/BottomNav";
-import { mockGames } from "@/types";
-
-const resultConfig = {
-  vitória: { color: "text-success", bg: "bg-success/10", icon: CheckCircle2, label: "Vitória" },
-  derrota: { color: "text-destructive", bg: "bg-destructive/10", icon: XCircle, label: "Derrota" },
-  empate: { color: "text-warning", bg: "bg-warning/10", icon: Minus, label: "Empate" },
-};
-
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-};
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { type: "spring" as const, duration: 0.4, bounce: 0.15 } },
-};
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import AppShell from "@/components/Layout/AppShell";
+import { useProfile } from "@/hooks/useProfile";
+import { formatDateTime } from "@/lib/formatters";
+import { createJogo, listJogos, removeJogo, updateJogo } from "@/lib/team-api";
+import type { Jogo } from "@/types/domain";
 
 const GamesPage = () => {
-  const upcoming = mockGames.filter((g) => g.status === "agendado");
-  const finished = mockGames.filter((g) => g.status === "finalizado");
+  const queryClient = useQueryClient();
+  const { data: profileData } = useProfile();
+  const perfilId = profileData?.perfil?.id;
+  const canManage = profileData?.role === "presidente";
 
-  const formatDate = (d: string) =>
-    new Date(d + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  const [form, setForm] = useState({
+    data_hora: "",
+    adversario: "",
+    local: "",
+    formacao: "",
+    notas: "",
+  });
+
+  const gamesQuery = useQuery({
+    queryKey: ["games", perfilId],
+    enabled: Boolean(perfilId),
+    queryFn: () => listJogos(perfilId as number),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!perfilId) return;
+      return createJogo(perfilId, {
+        data_hora: form.data_hora,
+        adversario: form.adversario,
+        local: form.local || null,
+        formacao: form.formacao || null,
+        notas: form.notas || null,
+      });
+    },
+    onSuccess: async () => {
+      toast.success("Jogo agendado");
+      setForm({ data_hora: "", adversario: "", local: "", formacao: "", notas: "" });
+      await queryClient.invalidateQueries({ queryKey: ["games", perfilId] });
+    },
+    onError: (error: any) => toast.error(error.message || "Falha ao criar jogo"),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: Jogo["status"] }) => updateJogo(id, { status }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["games", perfilId] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => removeJogo(id),
+    onSuccess: async () => {
+      toast.success("Jogo removido");
+      await queryClient.invalidateQueries({ queryKey: ["games", perfilId] });
+    },
+  });
+
+  const games = gamesQuery.data || [];
+  const upcoming = games.filter((g) => g.status === "agendado");
+  const done = games.filter((g) => g.status !== "agendado");
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8">
-      <Header />
-      <main className="relative z-10 px-4 md:px-6 py-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-1">Jogos</h1>
-        <p className="text-sm text-muted-foreground mb-8">Histórico e próximos jogos do time</p>
+    <AppShell>
+      <h1 className="text-2xl md:text-3xl font-display font-bold">Jogos</h1>
+      <p className="text-sm text-muted-foreground mb-6">Agendamento, status e detalhes de partidas.</p>
 
-        {/* Upcoming */}
-        {upcoming.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-base font-display font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Trophy size={18} strokeWidth={1.5} className="text-primary" />
-              Próximos Jogos
-            </h2>
-            <motion.div className="flex flex-col gap-3" variants={container} initial="hidden" animate="show">
-              {upcoming.map((game) => (
-                <motion.div key={game.id} variants={item} className="glass-card flex items-center gap-4 !p-4 !rounded-2xl">
-                  <div className="flex flex-col items-center min-w-[52px]">
-                    <span className="text-xs text-muted-foreground uppercase">{formatDate(game.date).split(" ")[1]}</span>
-                    <span className="text-xl font-display font-bold text-primary">{formatDate(game.date).split(" ")[0]}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display font-semibold text-foreground truncate">vs {game.opponent}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock size={12} strokeWidth={1.5} /> {game.time}</span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={12} strokeWidth={1.5} /> {game.location}</span>
-                    </div>
-                  </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">Agendado</span>
-                </motion.div>
-              ))}
-            </motion.div>
-          </section>
-        )}
+      {canManage && (
+        <div className="glass-card mb-4">
+          <h2 className="font-semibold mb-3">Novo jogo</h2>
+          <form
+            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              createMutation.mutate();
+            }}
+          >
+            <input type="datetime-local" required value={form.data_hora} onChange={(e) => setForm((p) => ({ ...p, data_hora: e.target.value }))} className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
+            <input required value={form.adversario} onChange={(e) => setForm((p) => ({ ...p, adversario: e.target.value }))} placeholder="Adversario" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
+            <input value={form.local} onChange={(e) => setForm((p) => ({ ...p, local: e.target.value }))} placeholder="Local" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
+            <input value={form.formacao} onChange={(e) => setForm((p) => ({ ...p, formacao: e.target.value }))} placeholder="Formacao (4-3-3)" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
+            <textarea value={form.notas} onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))} placeholder="Notas" className="md:col-span-2 rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
+            <button type="submit" className="md:col-span-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm">
+              {createMutation.isPending ? "Salvando..." : "Agendar jogo"}
+            </button>
+          </form>
+        </div>
+      )}
 
-        {/* History */}
-        <section>
-          <h2 className="text-base font-display font-semibold text-foreground mb-4">Histórico</h2>
-          <motion.div className="flex flex-col gap-3" variants={container} initial="hidden" animate="show">
-            {finished.map((game) => {
-              const rc = resultConfig[game.result as keyof typeof resultConfig];
-              const ResultIcon = rc?.icon || Minus;
-              return (
-                <motion.div key={game.id} variants={item} className="glass-card flex items-center gap-4 !p-4 !rounded-2xl">
-                  <div className="flex flex-col items-center min-w-[52px]">
-                    <span className="text-xs text-muted-foreground">{formatDate(game.date)}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="glass-card">
+          <h2 className="font-semibold mb-3">Proximos</h2>
+          <div className="space-y-2">
+            {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Sem jogos agendados.</p>}
+            {upcoming.map((game) => (
+              <div key={game.id} className="rounded-xl bg-muted/20 px-3 py-2">
+                <p className="font-medium">vs {game.adversario}</p>
+                <p className="text-xs text-muted-foreground">{formatDateTime(game.data_hora)} {game.local ? `- ${game.local}` : ""}</p>
+                {canManage && (
+                  <div className="flex gap-2 mt-2">
+                    <button className="text-xs px-2 py-1 rounded-lg bg-success/20 text-success" onClick={() => statusMutation.mutate({ id: game.id, status: "realizado" })}>Finalizar</button>
+                    <button className="text-xs px-2 py-1 rounded-lg bg-destructive/20 text-destructive" onClick={() => deleteMutation.mutate(game.id)}>Excluir</button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display font-semibold text-foreground truncate">vs {game.opponent}</p>
-                    <p className="text-sm text-muted-foreground mt-0.5">{game.location}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="font-mono font-bold text-foreground text-sm">{game.score}</span>
-                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${rc?.bg} ${rc?.color}`}>
-                      <ResultIcon size={12} strokeWidth={1.5} />
-                      {rc?.label}
-                    </span>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </section>
-      </main>
-      <BottomNav />
-    </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="glass-card">
+          <h2 className="font-semibold mb-3">Historico</h2>
+          <div className="space-y-2">
+            {done.length === 0 && <p className="text-sm text-muted-foreground">Ainda nao ha jogos finalizados.</p>}
+            {done.map((game) => (
+              <div key={game.id} className="rounded-xl bg-muted/20 px-3 py-2">
+                <p className="font-medium">vs {game.adversario}</p>
+                <p className="text-xs text-muted-foreground">{formatDateTime(game.data_hora)}</p>
+                <p className="text-xs mt-1">Status: {game.status}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </AppShell>
   );
 };
 

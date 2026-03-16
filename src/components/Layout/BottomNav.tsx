@@ -1,11 +1,12 @@
 import { useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Trophy, ClipboardCheck, Wallet } from "lucide-react";
+import { LayoutDashboard, Trophy, ClipboardCheck, Wallet, Users } from "lucide-react";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { path: "/", icon: LayoutDashboard, label: "Inicio" },
+  { path: "/jogadores", icon: Users, label: "Jogadores" },
   { path: "/jogos", icon: Trophy, label: "Jogos" },
-  { path: "/presenca", icon: ClipboardCheck, label: "Presença" },
+  { path: "/presenca", icon: ClipboardCheck, label: "Presenca" },
   { path: "/pagamentos", icon: Wallet, label: "Pagamentos" },
 ];
 
@@ -21,7 +22,7 @@ const BottomNav = () => {
             <Link
               key={path}
               to={path}
-              className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors ${
+              className={`relative flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-colors ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
