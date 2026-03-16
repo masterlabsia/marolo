@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
@@ -124,6 +124,18 @@ const PresenceRow = ({
   onSave: (payload: { presente: boolean; gols: number; assistencias: number; notas: string }) => void;
 }) => {
   const [state, setState] = useState(row);
+  const [lastSaved, setLastSaved] = useState(row);
+
+  useEffect(() => {
+    setState(row);
+    setLastSaved(row);
+  }, [row]);
+
+  const isDirty =
+    state.presente !== lastSaved.presente ||
+    state.gols !== lastSaved.gols ||
+    state.assistencias !== lastSaved.assistencias ||
+    state.notas !== lastSaved.notas;
 
   return (
     <tr className="border-b border-border/40">
@@ -142,9 +154,22 @@ const PresenceRow = ({
       </td>
       {canManage && (
         <td className="py-2 text-right">
-          <button className="text-xs rounded-lg bg-primary text-primary-foreground px-2 py-1" onClick={() => onSave(state)}>
-            Salvar
-          </button>
+          {isDirty && (
+            <button
+              className="text-xs rounded-lg bg-primary text-primary-foreground px-2 py-1"
+              onClick={() => {
+                onSave({
+                  presente: state.presente,
+                  gols: state.gols,
+                  assistencias: state.assistencias,
+                  notas: state.notas,
+                });
+                setLastSaved(state);
+              }}
+            >
+              Salvar
+            </button>
+          )}
         </td>
       )}
     </tr>

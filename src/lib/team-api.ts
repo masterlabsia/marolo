@@ -114,15 +114,43 @@ export async function listPresencasByJogo(jogoId: number) {
 export async function upsertPresenca(
   payload: Pick<Presenca, "jogo_id" | "jogador_id" | "presente" | "gols" | "assistencias" | "notas">,
 ) {
+  const cleanPayload = {
+    jogo_id: payload.jogo_id,
+    jogador_id: payload.jogador_id,
+    presente: payload.presente,
+    gols: payload.gols,
+    assistencias: payload.assistencias,
+    notas: payload.notas ?? null,
+  };
+
+  const existing = await supabase
+    .from("presencas")
+    .select("id")
+    .eq("jogo_id", cleanPayload.jogo_id)
+    .eq("jogador_id", cleanPayload.jogador_id)
+    .maybeSingle<{ id: number }>();
+
+  if (existing.error) throw existing.error;
+
+  if (existing.data?.id) {
+    const { data, error } = await supabase
+      .from("presencas")
+      .update(cleanPayload)
+      .eq("id", existing.data.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as Presenca;
+  }
+
   const { data, error } = await supabase
     .from("presencas")
-    .upsert(payload, { onConflict: "jogo_id,jogador_id" })
-    .select("*, jogadores(id, nome)")
+    .insert(cleanPayload)
+    .select("*")
     .single();
 
   if (error) throw error;
-
-  return { ...data, jogador: (data as any).jogadores } as Presenca;
+  return data as Presenca;
 }
 
 export async function listCaixa(perfilId: number) {
@@ -148,6 +176,26 @@ export async function createCaixa(
 
   if (error) throw error;
   return data as MovimentacaoCaixa;
+}
+
+export async function updateCaixa(
+  id: number,
+  payload: Pick<MovimentacaoCaixa, "tipo" | "categoria" | "descricao" | "valor" | "data_movimento" | "metodo_pagamento">,
+) {
+  const { data, error } = await supabase
+    .from("caixa")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as MovimentacaoCaixa;
+}
+
+export async function removeCaixa(id: number) {
+  const { error } = await supabase.from("caixa").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function listPagamentos(perfilId: number, mes: number, ano: number) {

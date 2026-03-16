@@ -2,19 +2,22 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
+import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { useProfile } from "@/hooks/useProfile";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { bulkCreateMensalidades, listJogadores, listPagamentos, upsertPagamento } from "@/lib/team-api";
+import { bulkCreateMensalidades, createCaixa, listJogadores, listPagamentos, upsertPagamento } from "@/lib/team-api";
 
 const PaymentsPage = () => {
   const queryClient = useQueryClient();
   const { data: profileData } = useProfile();
+  const { hidden } = useMonetaryPrivacy();
   const perfilId = profileData?.perfil?.id;
   const canManage = profileData?.role === "presidente";
 
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
+  const [editedValues, setEditedValues] = useState<Record<number, string>>({});
 
   const playersQuery = useQuery({
     queryKey: ["players", perfilId],
@@ -41,24 +44,77 @@ const PaymentsPage = () => {
     onError: (error: any) => toast.error(error.message || "Falha ao gerar mensalidades"),
   });
 
-  const markPaidMutation = useMutation({
-    mutationFn: async (jogadorId: number) => {
+  const savePaymentMutation = useMutation({
+    mutationFn: async (payload: { payment: any; nextStatus?: "pendente" | "pago" | "vencido"; nextValor?: number }) => {
       if (!perfilId) return;
-      return upsertPagamento(perfilId, {
-        jogador_id: jogadorId,
+      const payment = payload.payment;
+      const nextStatus = payload.nextStatus ?? payment.status;
+      const nextValor = payload.nextValor ?? Number(payment.valor);
+
+      const updated = await upsertPagamento(perfilId, {
+        jogador_id: payment.jogador_id,
         mes,
         ano,
-        valor: 100,
-        status: "pago",
+        valor: Number(nextValor) || 100,
+        status: nextStatus,
         data_vencimento: `${ano}-${String(mes).padStart(2, "0")}-10`,
-        data_pagamento: new Date().toISOString().slice(0, 10),
+        data_pagamento: nextStatus === "pago" ? new Date().toISOString().slice(0, 10) : null,
       });
+
+      const oldStatus = payment.status;
+      const oldValor = Number(payment.valor);
+      const diff = Number(nextValor) - oldValor;
+
+      if (oldStatus !== "pago" && nextStatus === "pago") {
+        await createCaixa(perfilId, {
+          tipo: "entrada",
+          categoria: "mensalidade",
+          descricao: `Mensalidade ${mes}/${ano} - ${payment.jogador?.nome || payment.jogador_id}`,
+          valor: Number(nextValor) || 100,
+          data_movimento: new Date().toISOString().slice(0, 10),
+          metodo_pagamento: "pix",
+        });
+      }
+
+      if (oldStatus === "pago" && nextStatus !== "pago") {
+        await createCaixa(perfilId, {
+          tipo: "saida",
+          categoria: "estorno_mensalidade",
+          descricao: `Estorno mensalidade ${mes}/${ano} - ${payment.jogador?.nome || payment.jogador_id}`,
+          valor: oldValor,
+          data_movimento: new Date().toISOString().slice(0, 10),
+          metodo_pagamento: "pix",
+        });
+      }
+
+      if (oldStatus === "pago" && nextStatus === "pago" && diff !== 0) {
+        await createCaixa(perfilId, {
+          tipo: diff > 0 ? "entrada" : "saida",
+          categoria: "ajuste_mensalidade",
+          descricao: `Ajuste mensalidade ${mes}/${ano} - ${payment.jogador?.nome || payment.jogador_id}`,
+          valor: Math.abs(diff),
+          data_movimento: new Date().toISOString().slice(0, 10),
+          metodo_pagamento: "pix",
+        });
+      }
+
+      return updated;
     },
-    onSuccess: async () => {
-      toast.success("Pagamento atualizado");
-      await queryClient.invalidateQueries({ queryKey: ["payments", perfilId, mes, ano] });
+    onSuccess: async (_data, variables) => {
+      toast.success("Pagamento salvo");
+      if (variables?.payment?.id) {
+        setEditedValues((prev) => {
+          const next = { ...prev };
+          delete next[variables.payment.id];
+          return next;
+        });
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payments", perfilId, mes, ano] }),
+        queryClient.invalidateQueries({ queryKey: ["cash", perfilId] }),
+      ]);
     },
-    onError: (error: any) => toast.error(error.message || "Erro ao atualizar pagamento"),
+    onError: (error: any) => toast.error(error.message || "Erro ao salvar pagamento"),
   });
 
   const rows = paymentsQuery.data || [];
@@ -88,7 +144,7 @@ const PaymentsPage = () => {
         <div className="glass-card"><p className="label-text">Pagos</p><p className="stat-number text-3xl">{summary.paid}</p></div>
         <div className="glass-card"><p className="label-text">Pendentes</p><p className="stat-number text-3xl">{summary.pending}</p></div>
         <div className="glass-card"><p className="label-text">Vencidos</p><p className="stat-number text-3xl">{summary.overdue}</p></div>
-        <div className="glass-card"><p className="label-text">Valor previsto</p><p className="stat-number text-3xl">{formatCurrency(summary.total)}</p></div>
+        <div className="glass-card"><p className="label-text">Valor previsto</p><p className="stat-number text-3xl">{hidden ? "R$ ••••" : formatCurrency(summary.total)}</p></div>
       </div>
 
       {canManage && (
@@ -114,12 +170,60 @@ const PaymentsPage = () => {
                 <td className="py-2">{payment.jogador?.nome || payment.jogador_id}</td>
                 <td className="py-2 capitalize">{payment.status}</td>
                 <td className="py-2">{formatDate(payment.data_vencimento)}</td>
-                <td className="py-2">{formatCurrency(Number(payment.valor))}</td>
+                <td className="py-2">
+                  {canManage && !hidden ? (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editedValues[payment.id] ?? String(payment.valor)}
+                      onChange={(e) => setEditedValues((p) => ({ ...p, [payment.id]: e.target.value }))}
+                      className="w-28 rounded-lg bg-muted/40 border border-border px-2 py-1"
+                    />
+                  ) : (
+                    hidden ? "R$ ••••" : formatCurrency(Number(payment.valor))
+                  )}
+                </td>
                 {canManage && (
-                  <td className="py-2 text-right">
+                  <td className="py-2 text-right space-x-1">
+                    {!hidden && Number(editedValues[payment.id] ?? payment.valor) !== Number(payment.valor) && (
+                      <button
+                        className="text-xs px-2 py-1 rounded-lg bg-primary/20 text-primary"
+                        onClick={() =>
+                          savePaymentMutation.mutate({
+                            payment,
+                            nextValor: Number(editedValues[payment.id] ?? payment.valor),
+                          })
+                        }
+                      >
+                        Salvar valor
+                      </button>
+                    )}
                     {payment.status !== "pago" && (
-                      <button className="text-xs px-2 py-1 rounded-lg bg-success/20 text-success" onClick={() => markPaidMutation.mutate(payment.jogador_id)}>
+                      <button
+                        className="text-xs px-2 py-1 rounded-lg bg-success/20 text-success"
+                        onClick={() =>
+                          savePaymentMutation.mutate({
+                            payment,
+                            nextStatus: "pago",
+                            nextValor: Number(editedValues[payment.id] ?? payment.valor),
+                          })
+                        }
+                      >
                         Marcar pago
+                      </button>
+                    )}
+                    {payment.status === "pago" && (
+                      <button
+                        className="text-xs px-2 py-1 rounded-lg bg-warning/20 text-warning"
+                        onClick={() =>
+                          savePaymentMutation.mutate({
+                            payment,
+                            nextStatus: "pendente",
+                            nextValor: Number(editedValues[payment.id] ?? payment.valor),
+                          })
+                        }
+                      >
+                        Desfazer pago
                       </button>
                     )}
                   </td>

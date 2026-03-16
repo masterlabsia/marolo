@@ -2,13 +2,15 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
+import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { useProfile } from "@/hooks/useProfile";
 import { formatCurrency } from "@/lib/formatters";
-import { createCaixa, listCaixa } from "@/lib/team-api";
+import { createCaixa, listCaixa, removeCaixa, updateCaixa } from "@/lib/team-api";
 
 const CashPage = () => {
   const queryClient = useQueryClient();
   const { data: profileData } = useProfile();
+  const { hidden } = useMonetaryPrivacy();
   const perfilId = profileData?.perfil?.id;
   const canManage = profileData?.role === "presidente";
 
@@ -20,6 +22,7 @@ const CashPage = () => {
     data_movimento: new Date().toISOString().slice(0, 10),
     metodo_pagamento: "pix",
   });
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const cashQuery = useQuery({
     queryKey: ["cash", perfilId],
@@ -27,24 +30,47 @@ const CashPage = () => {
     queryFn: () => listCaixa(perfilId as number),
   });
 
-  const createMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
       if (!perfilId) return;
-      return createCaixa(perfilId, {
+      const payload = {
         tipo: form.tipo as "entrada" | "saida",
         categoria: form.categoria || null,
         descricao: form.descricao,
         valor: Number(form.valor),
         data_movimento: form.data_movimento,
         metodo_pagamento: form.metodo_pagamento || null,
-      });
+      };
+
+      if (editingId) {
+        return updateCaixa(editingId, payload);
+      }
+
+      return createCaixa(perfilId, payload);
     },
     onSuccess: async () => {
-      toast.success("Movimentacao registrada");
-      setForm((p) => ({ ...p, descricao: "", valor: "" }));
+      toast.success(editingId ? "Movimentacao atualizada" : "Movimentacao registrada");
+      setEditingId(null);
+      setForm({
+        tipo: "entrada",
+        categoria: "mensalidade",
+        descricao: "",
+        valor: "",
+        data_movimento: new Date().toISOString().slice(0, 10),
+        metodo_pagamento: "pix",
+      });
       await queryClient.invalidateQueries({ queryKey: ["cash", perfilId] });
     },
-    onError: (error: any) => toast.error(error.message || "Erro ao registrar caixa"),
+    onError: (error: any) => toast.error(error.message || "Erro ao salvar movimentacao"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => removeCaixa(id),
+    onSuccess: async () => {
+      toast.success("Movimentacao excluida");
+      await queryClient.invalidateQueries({ queryKey: ["cash", perfilId] });
+    },
+    onError: (error: any) => toast.error(error.message || "Erro ao excluir movimentacao"),
   });
 
   const summary = useMemo(() => {
@@ -60,9 +86,9 @@ const CashPage = () => {
       <p className="text-sm text-muted-foreground mb-6">Entradas, saidas e saldo em tempo real.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="glass-card"><p className="label-text">Entradas</p><p className="stat-number text-3xl">{formatCurrency(summary.entradas)}</p></div>
-        <div className="glass-card"><p className="label-text">Saidas</p><p className="stat-number text-3xl">{formatCurrency(summary.saidas)}</p></div>
-        <div className="glass-card"><p className="label-text">Saldo</p><p className={`stat-number text-3xl ${summary.saldo < 0 ? "text-destructive" : ""}`}>{formatCurrency(summary.saldo)}</p></div>
+        <div className="glass-card"><p className="label-text">Entradas</p><p className="stat-number text-3xl">{hidden ? "R$ ••••" : formatCurrency(summary.entradas)}</p></div>
+        <div className="glass-card"><p className="label-text">Saidas</p><p className="stat-number text-3xl">{hidden ? "R$ ••••" : formatCurrency(summary.saidas)}</p></div>
+        <div className="glass-card"><p className="label-text">Saldo</p><p className={`stat-number text-3xl ${summary.saldo < 0 ? "text-destructive" : ""}`}>{hidden ? "R$ ••••" : formatCurrency(summary.saldo)}</p></div>
       </div>
 
       {canManage && (
@@ -72,7 +98,7 @@ const CashPage = () => {
             className="grid grid-cols-1 md:grid-cols-3 gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              createMutation.mutate();
+              saveMutation.mutate();
             }}
           >
             <select value={form.tipo} onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))} className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
@@ -84,7 +110,30 @@ const CashPage = () => {
             <input required type="number" step="0.01" value={form.valor} onChange={(e) => setForm((p) => ({ ...p, valor: e.target.value }))} placeholder="Valor" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
             <input required type="date" value={form.data_movimento} onChange={(e) => setForm((p) => ({ ...p, data_movimento: e.target.value }))} className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
             <input value={form.metodo_pagamento} onChange={(e) => setForm((p) => ({ ...p, metodo_pagamento: e.target.value }))} placeholder="Metodo" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
-            <button type="submit" className="md:col-span-3 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm">Registrar</button>
+            <div className="md:col-span-3 flex gap-2">
+              <button type="submit" className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm">
+                {saveMutation.isPending ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar"}
+              </button>
+              {editingId && (
+                <button
+                  type="button"
+                  className="rounded-xl bg-muted/40 px-4 py-2.5 text-sm"
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm({
+                      tipo: "entrada",
+                      categoria: "mensalidade",
+                      descricao: "",
+                      valor: "",
+                      data_movimento: new Date().toISOString().slice(0, 10),
+                      metodo_pagamento: "pix",
+                    });
+                  }}
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
           </form>
         </div>
       )}
@@ -98,6 +147,7 @@ const CashPage = () => {
               <th className="text-left py-2">Tipo</th>
               <th className="text-left py-2">Descricao</th>
               <th className="text-left py-2">Valor</th>
+              {canManage && <th className="text-right py-2">Acoes</th>}
             </tr>
           </thead>
           <tbody>
@@ -106,7 +156,33 @@ const CashPage = () => {
                 <td className="py-2">{new Date(row.data_movimento).toLocaleDateString("pt-BR")}</td>
                 <td className="py-2 capitalize">{row.tipo}</td>
                 <td className="py-2">{row.descricao}</td>
-                <td className={`py-2 ${row.tipo === "entrada" ? "text-success" : "text-destructive"}`}>{formatCurrency(Number(row.valor))}</td>
+                <td className={`py-2 ${row.tipo === "entrada" ? "text-success" : "text-destructive"}`}>{hidden ? "R$ ••••" : formatCurrency(Number(row.valor))}</td>
+                {canManage && (
+                  <td className="py-2 text-right space-x-1">
+                    <button
+                      className="text-xs px-2 py-1 rounded-lg bg-primary/20 text-primary"
+                      onClick={() => {
+                        setEditingId(row.id);
+                        setForm({
+                          tipo: row.tipo,
+                          categoria: row.categoria || "",
+                          descricao: row.descricao,
+                          valor: String(row.valor),
+                          data_movimento: row.data_movimento,
+                          metodo_pagamento: row.metodo_pagamento || "",
+                        });
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="text-xs px-2 py-1 rounded-lg bg-destructive/20 text-destructive"
+                      onClick={() => deleteMutation.mutate(row.id)}
+                    >
+                      Excluir
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

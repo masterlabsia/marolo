@@ -1,12 +1,14 @@
-import { LogOut, Shield, UserRound, Zap } from "lucide-react";
+import { Eye, EyeOff, LogOut, Shield, UserRound, Zap } from "lucide-react";
 import { toast } from "sonner";
 import DesktopNav from "./DesktopNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 
 const Header = () => {
   const { user, signOut } = useAuth();
   const { data } = useProfile();
+  const { hidden, toggle } = useMonetaryPrivacy();
 
   const handleLogout = async () => {
     try {
@@ -33,8 +35,15 @@ const Header = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={toggle}
+            className="p-2 rounded-xl hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+            title={hidden ? "Mostrar valores" : "Ocultar valores"}
+          >
+            {hidden ? <Eye size={18} strokeWidth={1.5} /> : <EyeOff size={18} strokeWidth={1.5} />}
+          </button>
           <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted/40 text-xs text-muted-foreground">
-            {data?.role === "presidente" ? <Shield size={12} /> : <UserRound size={12} />} {user?.username ?? data?.role ?? "-"}
+            {data?.role === "presidente" ? <Shield size={12} /> : <UserRound size={12} />} {user?.email ?? data?.role ?? "-"}
           </span>
           <button
             onClick={handleLogout}

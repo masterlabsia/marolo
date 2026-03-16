@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
+import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { listCaixa, listJogadores, listJogos, listPagamentos, listPresencasByJogo } from "@/lib/team-api";
 
 const Index = () => {
   const { data: profileData, isLoading: loadingProfile } = useProfile();
+  const { hidden } = useMonetaryPrivacy();
 
   const perfilId = profileData?.perfil?.id;
 
@@ -119,7 +121,7 @@ const Index = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="glass-card"><p className="label-text">Jogadores</p><p className="stat-number text-3xl">{dashboard.totalJogadores}</p></div>
         <div className="glass-card"><p className="label-text">Pagamentos pendentes</p><p className="stat-number text-3xl">{dashboard.pendentes}</p></div>
-        <div className="glass-card"><p className="label-text">Caixa</p><p className="stat-number text-3xl">{formatCurrency(dashboard.saldo)}</p></div>
+        <div className="glass-card"><p className="label-text">Caixa</p><p className="stat-number text-3xl">{hidden ? "R$ ••••" : formatCurrency(dashboard.saldo)}</p></div>
         <div className="glass-card">
           <p className="label-text">Proximo jogo</p>
           <p className="text-sm font-medium mt-2">{dashboard.proximoJogo ? `vs ${dashboard.proximoJogo.adversario}` : "-"}</p>
