@@ -193,9 +193,3 @@ Plano de 4 semanas para transformar o template em um app completo e fazer deploy
 - App mobile (React Native)
 - Sistema de notificações
 - Relatórios em PDF
-
----
-
-**Boa sorte! 🎉**
-
-Siga este roadmap dia a dia. Não precisa ser exato — o importante é progredir consistentemente.
