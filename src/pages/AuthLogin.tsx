@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabaseEnvError } from "@/lib/supabase";
 
 const AuthLoginPage = () => {
   const navigate = useNavigate();
@@ -34,6 +35,11 @@ const AuthLoginPage = () => {
       <div className="w-full max-w-md glass-card">
         <h1 className="text-2xl font-display font-bold">{isRegister ? "Criar conta" : "Entrar"}</h1>
         <p className="text-sm text-muted-foreground mt-1">Use um usuario do Supabase Auth (email + senha).</p>
+        {supabaseEnvError && (
+          <p className="mt-3 text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+            Ambiente sem variáveis VITE do Supabase. Configure no deploy para liberar login.
+          </p>
+        )}
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div>

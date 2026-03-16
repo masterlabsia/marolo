@@ -59,6 +59,15 @@ O frontend usa o Supabase diretamente (auth + tabelas). Para evitar erro **404 e
 3. Copie e execute todo o conteúdo do arquivo **`backend/src/db/schema.sql`** (cria as tabelas `perfis`, `jogadores`, `jogos`, `membros`, `caixa`, `pagamentos`, `presencas`, etc.).
 4. Se aparecer na URL `#error=access_denied&error_code=otp_expired` (link de e-mail expirado), o app agora limpa a URL, faz sign out e exibe um aviso; entre com **e-mail e senha** na tela de login.
 
+## Deploy sem tela branca
+
+No ambiente de deploy, configure estas variáveis **no projeto frontend raiz**:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Se não configurar, o app pode carregar sem sessão e bloquear autenticação.
+
 ## What technologies are used for this project?
 
 This project is built with:

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 interface AuthContextValue {
   user: User | null;
@@ -20,6 +20,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Limpa legado do login fixo local
     sessionStorage.removeItem("marolo_fixed_auth");
+
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -42,14 +47,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       signIn: async (email: string, password: string) => {
+        if (!isSupabaseConfigured) throw new Error("Configuração Supabase ausente no deploy");
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       },
       signUp: async (email: string, password: string) => {
+        if (!isSupabaseConfigured) throw new Error("Configuração Supabase ausente no deploy");
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
       },
       signOut: async () => {
+        if (!isSupabaseConfigured) throw new Error("Configuração Supabase ausente no deploy");
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
       },
