@@ -192,4 +192,8 @@ Plano de 4 semanas para transformar o template em um app completo e fazer deploy
 - Integração com Stripe para pagamentos
 - App mobile (React Native)
 - Sistema de notificações
+<<<<<<< HEAD
 - Relatórios em PDF
+=======
+- Relatórios em PDF
+>>>>>>> 302ccc7 (updates)
