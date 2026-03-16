@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
+import { canManageRole } from "@/lib/permissions";
 import { listJogadores, listJogos, listPresencasByJogo, upsertPresenca } from "@/lib/team-api";
 
 const PresencePage = () => {
   const queryClient = useQueryClient();
   const { data: profileData } = useProfile();
   const perfilId = profileData?.perfil?.id;
-  const canManage = profileData?.role === "presidente";
+  const canManage = canManageRole(profileData?.role);
 
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
 

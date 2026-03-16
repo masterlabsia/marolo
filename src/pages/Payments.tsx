@@ -5,6 +5,7 @@ import AppShell from "@/components/Layout/AppShell";
 import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { useProfile } from "@/hooks/useProfile";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { canManageRole } from "@/lib/permissions";
 import { bulkCreateMensalidades, createCaixa, listJogadores, listPagamentos, upsertPagamento } from "@/lib/team-api";
 
 const PaymentsPage = () => {
@@ -12,7 +13,7 @@ const PaymentsPage = () => {
   const { data: profileData } = useProfile();
   const { hidden } = useMonetaryPrivacy();
   const perfilId = profileData?.perfil?.id;
-  const canManage = profileData?.role === "presidente";
+  const canManage = canManageRole(profileData?.role);
 
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);

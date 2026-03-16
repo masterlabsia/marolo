@@ -21,66 +21,47 @@ export function useProfile() {
     retry: false,
     queryFn: async () => {
       if (!user) return null;
-      const fallbackRole: Papel = user.role === "admin" ? "presidente" : "jogador";
 
-      // Modo login fixo (admin/jogador): user.id nao e UUID.
-      // Neste modo usamos o primeiro perfil como fallback para destravar a UI.
-      if (!isUuid(user.id)) {
-        const first = await supabase
-          .from("perfis")
-          .select("*")
-          .limit(1)
-          .maybeSingle<Perfil>();
+      const firstTeam = await supabase
+        .from("perfis")
+        .select("*")
+        .limit(1)
+        .maybeSingle<Perfil>();
 
-        if (first.error) {
-          if (isMissingTableError(first.error)) {
-            return {
-              perfil: null,
-              role: fallbackRole,
-              schemaMissing: true,
-            };
-          }
-          throw first.error;
+      if (firstTeam.error) {
+        if (isMissingTableError(firstTeam.error)) {
+          return {
+            perfil: null,
+            role: "jogador" as Papel,
+            schemaMissing: true,
+          };
         }
+        throw firstTeam.error;
+      }
 
+      if (!firstTeam.data) {
         return {
-          perfil: first.data ?? null,
-          role: fallbackRole,
+          perfil: null,
+          role: "jogador" as Papel,
           schemaMissing: false,
         };
       }
 
-      const own = await supabase
-        .from("perfis")
-        .select("*")
-        .eq("usuario_id", user.id)
-        .maybeSingle<Perfil>();
-
-      if (own.error) {
-        if (isMissingTableError(own.error)) {
-          return {
-            perfil: null,
-            role: "presidente" as Papel,
-            schemaMissing: true,
-          };
-        }
-        throw own.error;
-      }
-
-      if (own.data) {
+      if (isUuid(user.id) && firstTeam.data.usuario_id === user.id) {
         return {
-          perfil: own.data,
-          role: "presidente" as Papel,
+          perfil: firstTeam.data,
+          role: "admin" as Papel,
           schemaMissing: false,
         };
       }
 
       const member = await supabase
         .from("membros")
-        .select("papel, perfis(*)")
+        .select("papel")
+        .eq("perfil_id", firstTeam.data.id)
         .eq("usuario_id", user.id)
         .limit(1)
-        .maybeSingle<{ papel: Papel; perfis: Perfil }>();
+        .maybeSingle<{ papel: Papel }>();
 
       if (member.error) {
         if (isMissingTableError(member.error)) {
@@ -102,7 +83,7 @@ export function useProfile() {
       }
 
       return {
-        perfil: member.data.perfis,
+        perfil: firstTeam.data,
         role: (member.data.papel ?? "jogador") as Papel,
         schemaMissing: false,
       };

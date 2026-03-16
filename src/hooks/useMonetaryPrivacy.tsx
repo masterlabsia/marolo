@@ -13,8 +13,12 @@ export function MonetaryPrivacyProvider({ children }: { children: React.ReactNod
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    setHidden(raw === "true");
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      setHidden(raw === "true");
+    } catch {
+      setHidden(false);
+    }
   }, []);
 
   const value = useMemo(
@@ -23,7 +27,11 @@ export function MonetaryPrivacyProvider({ children }: { children: React.ReactNod
       toggle: () => {
         setHidden((prev) => {
           const next = !prev;
-          localStorage.setItem(STORAGE_KEY, String(next));
+          try {
+            localStorage.setItem(STORAGE_KEY, String(next));
+          } catch {
+            // ignore storage access errors
+          }
           return next;
         });
       },

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
+import { canManageRole } from "@/lib/permissions";
 import { createJogador, listJogadores, removeJogador, updateJogador } from "@/lib/team-api";
 import type { Jogador } from "@/types/domain";
 
@@ -19,7 +20,7 @@ const PlayersPage = () => {
   const queryClient = useQueryClient();
   const { data: profileData } = useProfile();
   const perfilId = profileData?.perfil?.id;
-  const canManage = profileData?.role === "presidente";
+  const canManage = canManageRole(profileData?.role);
 
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);

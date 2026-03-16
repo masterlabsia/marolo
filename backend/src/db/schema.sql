@@ -1,5 +1,7 @@
 -- PRD v2.0 - Marolo App
--- Schema idempotente para Supabase (pode rodar multiplas vezes)
+-- Modo single-team consultivo:
+-- - admin edita
+-- - jogador apenas consulta
 
 create extension if not exists pgcrypto;
 
@@ -11,6 +13,49 @@ begin
   new.updated_at = now();
   return new;
 end;
+$$;
+
+create or replace function public.has_team_access(p_perfil_id bigint)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.perfis p
+    where p.id = p_perfil_id
+      and (
+        p.usuario_id = auth.uid()
+        or exists (
+          select 1
+          from public.membros m
+          where m.perfil_id = p.id
+            and m.usuario_id = auth.uid()
+        )
+      )
+  );
+$$;
+
+create or replace function public.is_team_admin(p_perfil_id bigint)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.perfis p
+    where p.id = p_perfil_id
+      and (
+        p.usuario_id = auth.uid()
+        or exists (
+          select 1
+          from public.membros m
+          where m.perfil_id = p.id
+            and m.usuario_id = auth.uid()
+            and m.papel = 'admin'
+        )
+      )
+  );
 $$;
 
 -- =====================================================
@@ -113,36 +158,30 @@ create table if not exists public.membros (
 );
 
 -- =====================================================
--- Triggers (recriacao segura)
+-- Triggers
 -- =====================================================
 drop trigger if exists trg_perfis_updated_at on public.perfis;
-create trigger trg_perfis_updated_at
-before update on public.perfis
+create trigger trg_perfis_updated_at before update on public.perfis
 for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_jogadores_updated_at on public.jogadores;
-create trigger trg_jogadores_updated_at
-before update on public.jogadores
+create trigger trg_jogadores_updated_at before update on public.jogadores
 for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_jogos_updated_at on public.jogos;
-create trigger trg_jogos_updated_at
-before update on public.jogos
+create trigger trg_jogos_updated_at before update on public.jogos
 for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_presencas_updated_at on public.presencas;
-create trigger trg_presencas_updated_at
-before update on public.presencas
+create trigger trg_presencas_updated_at before update on public.presencas
 for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_caixa_updated_at on public.caixa;
-create trigger trg_caixa_updated_at
-before update on public.caixa
+create trigger trg_caixa_updated_at before update on public.caixa
 for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_pagamentos_updated_at on public.pagamentos;
-create trigger trg_pagamentos_updated_at
-before update on public.pagamentos
+create trigger trg_pagamentos_updated_at before update on public.pagamentos
 for each row execute function public.set_updated_at();
 
 -- =====================================================
@@ -157,11 +196,19 @@ alter table public.pagamentos enable row level security;
 alter table public.membros enable row level security;
 
 -- =====================================================
--- Policies (drop + create para compatibilidade)
+-- Policies
 -- =====================================================
 drop policy if exists perfis_read_all on public.perfis;
 create policy perfis_read_all on public.perfis
-for select using (true);
+for select using (
+  usuario_id = auth.uid()
+  or exists (
+    select 1
+    from public.membros m
+    where m.perfil_id = perfis.id
+      and m.usuario_id = auth.uid()
+  )
+);
 
 drop policy if exists perfis_insert_own on public.perfis;
 create policy perfis_insert_own on public.perfis
@@ -169,7 +216,7 @@ for insert with check (auth.uid() = usuario_id);
 
 drop policy if exists perfis_update_own on public.perfis;
 create policy perfis_update_own on public.perfis
-for update using (auth.uid() = usuario_id);
+for update using (auth.uid() = usuario_id) with check (auth.uid() = usuario_id);
 
 drop policy if exists perfis_delete_own on public.perfis;
 create policy perfis_delete_own on public.perfis
@@ -177,14 +224,7 @@ for delete using (auth.uid() = usuario_id);
 
 drop policy if exists membros_read_team on public.membros;
 create policy membros_read_team on public.membros
-for select using (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = membros.perfil_id
-      and (p.usuario_id = auth.uid() or membros.usuario_id = auth.uid())
-  )
-);
+for select using (usuario_id = auth.uid());
 
 drop policy if exists membros_insert_owner on public.membros;
 create policy membros_insert_owner on public.membros
@@ -197,125 +237,94 @@ for insert with check (
   )
 );
 
+drop policy if exists membros_update_admin on public.membros;
+create policy membros_update_admin on public.membros
+for update
+using (
+  exists (
+    select 1
+    from public.perfis p
+    where p.id = membros.perfil_id
+      and p.usuario_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.perfis p
+    where p.id = membros.perfil_id
+      and p.usuario_id = auth.uid()
+  )
+);
+
+drop policy if exists membros_delete_admin on public.membros;
+create policy membros_delete_admin on public.membros
+for delete
+using (
+  exists (
+    select 1
+    from public.perfis p
+    where p.id = membros.perfil_id
+      and p.usuario_id = auth.uid()
+  )
+);
+
 drop policy if exists jogadores_read_all on public.jogadores;
 create policy jogadores_read_all on public.jogadores
-for select using (true);
-
-drop policy if exists jogos_read_all on public.jogos;
-create policy jogos_read_all on public.jogos
-for select using (true);
-
-drop policy if exists presencas_read_all on public.presencas;
-create policy presencas_read_all on public.presencas
-for select using (true);
-
-drop policy if exists caixa_read_all on public.caixa;
-create policy caixa_read_all on public.caixa
-for select using (true);
-
-drop policy if exists pagamentos_read_all on public.pagamentos;
-create policy pagamentos_read_all on public.pagamentos
-for select using (true);
+for select using (public.has_team_access(perfil_id));
 
 drop policy if exists jogadores_modify_owner on public.jogadores;
 create policy jogadores_modify_owner on public.jogadores
-for all
-using (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = jogadores.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = jogadores.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-);
+for all using (public.is_team_admin(perfil_id)) with check (public.is_team_admin(perfil_id));
+
+drop policy if exists jogos_read_all on public.jogos;
+create policy jogos_read_all on public.jogos
+for select using (public.has_team_access(perfil_id));
 
 drop policy if exists jogos_modify_owner on public.jogos;
 create policy jogos_modify_owner on public.jogos
-for all
-using (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = jogos.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = jogos.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-);
+for all using (public.is_team_admin(perfil_id)) with check (public.is_team_admin(perfil_id));
+
+drop policy if exists caixa_read_all on public.caixa;
+create policy caixa_read_all on public.caixa
+for select using (public.has_team_access(perfil_id));
 
 drop policy if exists caixa_modify_owner on public.caixa;
 create policy caixa_modify_owner on public.caixa
-for all
-using (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = caixa.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = caixa.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-);
+for all using (public.is_team_admin(perfil_id)) with check (public.is_team_admin(perfil_id));
+
+drop policy if exists pagamentos_read_all on public.pagamentos;
+create policy pagamentos_read_all on public.pagamentos
+for select using (public.has_team_access(perfil_id));
 
 drop policy if exists pagamentos_modify_owner on public.pagamentos;
 create policy pagamentos_modify_owner on public.pagamentos
-for all
-using (
+for all using (public.is_team_admin(perfil_id)) with check (public.is_team_admin(perfil_id));
+
+drop policy if exists presencas_read_all on public.presencas;
+create policy presencas_read_all on public.presencas
+for select using (
   exists (
-    select 1
-    from public.perfis p
-    where p.id = pagamentos.perfil_id
-      and p.usuario_id = auth.uid()
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.perfis p
-    where p.id = pagamentos.perfil_id
-      and p.usuario_id = auth.uid()
+    select 1 from public.jogos j
+    where j.id = presencas.jogo_id
+      and public.has_team_access(j.perfil_id)
   )
 );
 
 drop policy if exists presencas_modify_owner on public.presencas;
 create policy presencas_modify_owner on public.presencas
-for all
-using (
+for all using (
   exists (
-    select 1
-    from public.jogos j
-    join public.perfis p on p.id = j.perfil_id
+    select 1 from public.jogos j
     where j.id = presencas.jogo_id
-      and p.usuario_id = auth.uid()
+      and public.is_team_admin(j.perfil_id)
   )
 )
 with check (
   exists (
-    select 1
-    from public.jogos j
-    join public.perfis p on p.id = j.perfil_id
+    select 1 from public.jogos j
     where j.id = presencas.jogo_id
-      and p.usuario_id = auth.uid()
+      and public.is_team_admin(j.perfil_id)
   )
 );
 

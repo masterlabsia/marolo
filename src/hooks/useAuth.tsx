@@ -19,7 +19,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Limpa legado do login fixo local
-    sessionStorage.removeItem("marolo_fixed_auth");
+    try {
+      sessionStorage.removeItem("marolo_fixed_auth");
+    } catch {
+      // ignore storage access errors
+    }
 
     if (!isSupabaseConfigured) {
       setLoading(false);

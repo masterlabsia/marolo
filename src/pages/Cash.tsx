@@ -5,6 +5,7 @@ import AppShell from "@/components/Layout/AppShell";
 import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { useProfile } from "@/hooks/useProfile";
 import { formatCurrency } from "@/lib/formatters";
+import { canManageRole } from "@/lib/permissions";
 import { createCaixa, listCaixa, removeCaixa, updateCaixa } from "@/lib/team-api";
 
 const CashPage = () => {
@@ -12,7 +13,7 @@ const CashPage = () => {
   const { data: profileData } = useProfile();
   const { hidden } = useMonetaryPrivacy();
   const perfilId = profileData?.perfil?.id;
-  const canManage = profileData?.role === "presidente";
+  const canManage = canManageRole(profileData?.role);
 
   const [form, setForm] = useState({
     tipo: "entrada",

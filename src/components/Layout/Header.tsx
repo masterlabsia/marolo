@@ -43,7 +43,7 @@ const Header = () => {
             {hidden ? <Eye size={18} strokeWidth={1.5} /> : <EyeOff size={18} strokeWidth={1.5} />}
           </button>
           <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted/40 text-xs text-muted-foreground">
-            {data?.role === "presidente" ? <Shield size={12} /> : <UserRound size={12} />} {user?.email ?? data?.role ?? "-"}
+            {data?.role === "admin" ? <Shield size={12} /> : <UserRound size={12} />} {user?.email ?? data?.role ?? "-"}
           </span>
           <button
             onClick={handleLogout}

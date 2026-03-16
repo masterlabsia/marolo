@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProtectedRoute from "@/components/Auth/ProtectedRoute";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { MonetaryPrivacyProvider } from "@/hooks/useMonetaryPrivacy";
 import Index from "@/pages/Index";
@@ -33,31 +34,33 @@ const LoginRedirect = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <MonetaryPrivacyProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Routes>
-              <Route path="/auth/login" element={<LoginRedirect />} />
-              <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<Index />} />
-                <Route path="/jogadores" element={<PlayersPage />} />
-                <Route path="/jogos" element={<GamesPage />} />
-                <Route path="/presenca" element={<PresencePage />} />
-                <Route path="/pagamentos" element={<PaymentsPage />} />
-                <Route path="/caixa" element={<CashPage />} />
-                <Route path="/estatisticas" element={<StatsPage />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </MonetaryPrivacyProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <AppErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <MonetaryPrivacyProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <Routes>
+                <Route path="/auth/login" element={<LoginRedirect />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/jogadores" element={<PlayersPage />} />
+                  <Route path="/jogos" element={<GamesPage />} />
+                  <Route path="/presenca" element={<PresencePage />} />
+                  <Route path="/pagamentos" element={<PaymentsPage />} />
+                  <Route path="/caixa" element={<CashPage />} />
+                  <Route path="/estatisticas" element={<StatsPage />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </MonetaryPrivacyProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </AppErrorBoundary>
 );
 
 export default App;

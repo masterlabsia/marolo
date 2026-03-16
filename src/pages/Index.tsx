@@ -5,11 +5,13 @@ import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
 import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import { canManageRole } from "@/lib/permissions";
 import { listCaixa, listJogadores, listJogos, listPagamentos, listPresencasByJogo } from "@/lib/team-api";
 
 const Index = () => {
   const { data: profileData, isLoading: loadingProfile } = useProfile();
   const { hidden } = useMonetaryPrivacy();
+  const canManage = canManageRole(profileData?.role);
 
   const perfilId = profileData?.perfil?.id;
 
@@ -171,7 +173,7 @@ const Index = () => {
       <div className="glass-card mt-4">
         <h2 className="font-semibold mb-3">Acoes rapidas</h2>
         <div className="flex flex-wrap gap-2">
-          {profileData?.role === "presidente" && (
+          {canManage && (
             <>
               <Link to="/jogos" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogo</Link>
               <Link to="/jogadores" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogador</Link>
