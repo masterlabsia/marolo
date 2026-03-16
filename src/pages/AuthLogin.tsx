@@ -5,9 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 const AuthLoginPage = () => {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
-  const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState("");
+  const { signIn } = useAuth();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -15,15 +14,10 @@ const AuthLoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isRegister) {
-        await signUp(email, password);
-        toast.success("Conta criada. Verifique seu e-mail para confirmar cadastro.");
-      } else {
-        await signIn(email, password);
-        navigate("/");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Falha na autenticacao");
+      await signIn(username.trim(), password);
+      navigate("/");
+    } catch {
+      // erro já tratado em useAuth (toast)
     } finally {
       setLoading(false);
     }
@@ -32,18 +26,20 @@ const AuthLoginPage = () => {
   return (
     <div className="min-h-screen bg-background grid place-items-center p-4">
       <div className="w-full max-w-md glass-card">
-        <h1 className="text-2xl font-display font-bold">{isRegister ? "Criar conta" : "Entrar"}</h1>
-        <p className="text-sm text-muted-foreground mt-1">Acesso ao Marolo App para presidente e jogadores.</p>
+        <h1 className="text-2xl font-display font-bold">Entrar</h1>
+        <p className="text-sm text-muted-foreground mt-1">Acesso ao Marolo App. Use seu usuário e senha.</p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="text-xs text-muted-foreground">Email</label>
+            <label className="text-xs text-muted-foreground">Usuário</label>
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="mt-1 w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
+              placeholder="ex: admin ou jogador"
             />
           </div>
           <div>
@@ -51,7 +47,7 @@ const AuthLoginPage = () => {
             <input
               type="password"
               required
-              minLength={6}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
@@ -62,17 +58,9 @@ const AuthLoginPage = () => {
             className="w-full rounded-xl bg-primary text-primary-foreground py-2.5 font-medium disabled:opacity-50"
             type="submit"
           >
-            {loading ? "Aguarde..." : isRegister ? "Criar conta" : "Entrar"}
+            {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-
-        <button
-          className="mt-4 text-sm text-primary"
-          onClick={() => setIsRegister((v) => !v)}
-          type="button"
-        >
-          {isRegister ? "Ja tenho conta" : "Primeiro acesso? Criar conta"}
-        </button>
       </div>
     </div>
   );

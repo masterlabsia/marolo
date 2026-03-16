@@ -7,33 +7,28 @@ export function useProfile() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["profile", user?.id],
+    queryKey: ["profile", user?.id, user?.role],
     enabled: Boolean(user?.id),
+    retry: (failureCount, error: unknown) => {
+      const err = error as { status?: number; code?: string };
+      if (err?.status === 404 || err?.code === "42P01" || (err as any)?.message?.includes("relation") || failureCount >= 2) return false;
+      return failureCount < 2;
+    },
     queryFn: async () => {
       if (!user) return null;
 
-      const own = await supabase
+      // Login fixo: usar primeiro perfil do Supabase e role do auth
+      const first = await supabase
         .from("perfis")
         .select("*")
-        .eq("usuario_id", user.id)
+        .limit(1)
         .maybeSingle<Perfil>();
 
-      if (own.error) throw own.error;
-      if (own.data) {
-        return { perfil: own.data, role: "presidente" as Papel };
-      }
+      if (first.error) throw first.error;
+      if (!first.data) return null;
 
-      const member = await supabase
-        .from("membros")
-        .select("papel, perfis(*)")
-        .eq("usuario_id", user.id)
-        .limit(1)
-        .maybeSingle<{ papel: Papel; perfis: Perfil }>();
-
-      if (member.error) throw member.error;
-      if (!member.data) return null;
-
-      return { perfil: member.data.perfis, role: (member.data.papel ?? "jogador") as Papel };
+      const role: Papel = user.role === "admin" ? "presidente" : "jogador";
+      return { perfil: first.data, role };
     },
   });
 }

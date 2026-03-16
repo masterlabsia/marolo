@@ -1,19 +1,13 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
-import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { formatCurrency, formatDateTime, toSlug } from "@/lib/formatters";
-import { createPerfil, listCaixa, listJogadores, listJogos, listPagamentos, listPresencasByJogo } from "@/lib/team-api";
+import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import { listCaixa, listJogadores, listJogos, listPagamentos, listPresencasByJogo } from "@/lib/team-api";
 
 const Index = () => {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
   const { data: profileData, isLoading: loadingProfile } = useProfile();
-  const [teamName, setTeamName] = useState("");
-  const [teamDescription, setTeamDescription] = useState("");
 
   const perfilId = profileData?.perfil?.id;
 
@@ -50,21 +44,6 @@ const Index = () => {
       const byGame = await Promise.all(gameIds.map((id) => listPresencasByJogo(id)));
       return gameIds.map((id, idx) => ({ gameId: id, presencas: byGame[idx] }));
     },
-  });
-
-  const createTeamMutation = useMutation({
-    mutationFn: async () => {
-      if (!user) return;
-      const slug = `${toSlug(teamName)}-${Math.floor(Math.random() * 1000)}`;
-      await createPerfil({ nome_time: teamName, descricao: teamDescription || null, slug }, user.id);
-    },
-    onSuccess: async () => {
-      toast.success("Time criado com sucesso");
-      await queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
-      setTeamName("");
-      setTeamDescription("");
-    },
-    onError: (error: any) => toast.error(error.message || "Falha ao criar time"),
   });
 
   const dashboard = useMemo(() => {
@@ -121,32 +100,8 @@ const Index = () => {
     return (
       <AppShell>
         <div className="max-w-xl glass-card">
-          <h1 className="text-2xl font-bold">Crie seu primeiro time</h1>
-          <p className="text-sm text-muted-foreground mt-2">Onboarding inicial do presidente para liberar o dashboard.</p>
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              createTeamMutation.mutate();
-            }}
-          >
-            <input
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              required
-              placeholder="Nome do time"
-              className="w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
-            />
-            <textarea
-              value={teamDescription}
-              onChange={(e) => setTeamDescription(e.target.value)}
-              placeholder="Descricao"
-              className="w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
-            />
-            <button className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 font-medium" type="submit">
-              {createTeamMutation.isPending ? "Criando..." : "Criar time"}
-            </button>
-          </form>
+          <h1 className="text-2xl font-bold">Nenhum time cadastrado</h1>
+          <p className="text-sm text-muted-foreground mt-2">Nenhum time no sistema. Contate o administrador para configurar.</p>
         </div>
       </AppShell>
     );
@@ -210,8 +165,12 @@ const Index = () => {
       <div className="glass-card mt-4">
         <h2 className="font-semibold mb-3">Acoes rapidas</h2>
         <div className="flex flex-wrap gap-2">
-          <Link to="/jogos" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogo</Link>
-          <Link to="/jogadores" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogador</Link>
+          {profileData?.role === "presidente" && (
+            <>
+              <Link to="/jogos" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogo</Link>
+              <Link to="/jogadores" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogador</Link>
+            </>
+          )}
           <Link to="/estatisticas" className="px-3 py-2 rounded-xl bg-muted/40 text-sm">Ver estatisticas</Link>
           <Link to="/caixa" className="px-3 py-2 rounded-xl bg-muted/40 text-sm">Caixa</Link>
         </div>

@@ -50,6 +50,15 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## Setup local com Supabase
+
+O frontend usa o Supabase diretamente (auth + tabelas). Para evitar erro **404 em `/rest/v1/perfis`** e conseguir logar e ver dados:
+
+1. Crie um projeto em [Supabase](https://supabase.com) e configure as variáveis no frontend (`.env` com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`).
+2. No painel do Supabase, abra **SQL Editor** → **New Query**.
+3. Copie e execute todo o conteúdo do arquivo **`backend/src/db/schema.sql`** (cria as tabelas `perfis`, `jogadores`, `jogos`, `membros`, `caixa`, `pagamentos`, `presencas`, etc.).
+4. Se aparecer na URL `#error=access_denied&error_code=otp_expired` (link de e-mail expirado), o app agora limpa a URL, faz sign out e exibe um aviso; entre com **e-mail e senha** na tela de login.
+
 ## What technologies are used for this project?
 
 This project is built with:

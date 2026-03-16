@@ -1,57 +1,83 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+
+export type FixedRole = "admin" | "jogador";
+
+export interface FixedUser {
+  id: string;
+  username: string;
+  role: FixedRole;
+}
+
+const FIXED_CREDENTIALS: { username: string; password: string; role: FixedRole }[] = [
+  { username: "jogador", password: "marolo2026", role: "jogador" },
+  { username: "admin", password: "2026marolo", role: "admin" },
+];
+
+const STORAGE_KEY = "marolo_fixed_auth";
+
+function loadStored(): FixedUser | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as FixedUser;
+    if (data?.username && (data.role === "admin" || data.role === "jogador")) return data;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function saveStored(user: FixedUser | null) {
+  if (user) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  else sessionStorage.removeItem(STORAGE_KEY);
+}
 
 interface AuthContextValue {
-  user: User | null;
-  session: Session | null;
+  user: FixedUser | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<FixedUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setLoading(false);
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    setUser(loadStored());
+    setLoading(false);
   }, []);
 
   const value = useMemo(
     () => ({
-      user: session?.user ?? null,
-      session,
+      user,
       loading,
-      signIn: async (email: string, password: string) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      },
-      signUp: async (email: string, password: string) => {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
+      signIn: async (username: string, password: string) => {
+        const normalized = username.trim().toLowerCase();
+        const found = FIXED_CREDENTIALS.find(
+          (c) => c.username === normalized && c.password === password
+        );
+        if (!found) {
+          toast.error("Usuário ou senha inválidos.");
+          throw new Error("Usuário ou senha inválidos.");
+        }
+        const fixedUser: FixedUser = {
+          id: found.username,
+          username: found.username,
+          role: found.role,
+        };
+        setUser(fixedUser);
+        saveStored(fixedUser);
       },
       signOut: async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        setUser(null);
+        saveStored(null);
       },
     }),
-    [loading, session],
+    [user, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

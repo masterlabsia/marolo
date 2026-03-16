@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 
 const Header = () => {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { data } = useProfile();
 
   const handleLogout = async () => {
@@ -34,7 +34,7 @@ const Header = () => {
 
         <div className="flex items-center gap-2">
           <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted/40 text-xs text-muted-foreground">
-            {data?.role === "presidente" ? <Shield size={12} /> : <UserRound size={12} />} {data?.role || "-"}
+            {data?.role === "presidente" ? <Shield size={12} /> : <UserRound size={12} />} {user?.username ?? data?.role ?? "-"}
           </span>
           <button
             onClick={handleLogout}
