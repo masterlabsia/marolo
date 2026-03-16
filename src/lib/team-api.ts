@@ -12,6 +12,18 @@ export async function createPerfil(payload: Pick<Perfil, "nome_time" | "slug" | 
   return data as Perfil;
 }
 
+export async function updatePerfilConfiguracao(perfilId: number, configuracao_tema: Record<string, unknown>) {
+  const { data, error } = await supabase
+    .from("perfis")
+    .update({ configuracao_tema })
+    .eq("id", perfilId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Perfil;
+}
+
 export async function listJogadores(perfilId: number) {
   const { data, error } = await supabase
     .from("jogadores")
@@ -230,7 +242,7 @@ export async function upsertPagamento(
   return { ...data, jogador: (data as any).jogadores } as Pagamento;
 }
 
-export async function bulkCreateMensalidades(perfilId: number, jogadorIds: number[], mes: number, ano: number, valor = 100) {
+export async function bulkCreateMensalidades(perfilId: number, jogadorIds: number[], mes: number, ano: number, valor = 130) {
   const payload = jogadorIds.map((jogadorId) => ({
     perfil_id: perfilId,
     jogador_id: jogadorId,

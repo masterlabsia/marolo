@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
@@ -6,7 +6,9 @@ import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { useProfile } from "@/hooks/useProfile";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { canManageRole } from "@/lib/permissions";
-import { bulkCreateMensalidades, createCaixa, listJogadores, listPagamentos, upsertPagamento } from "@/lib/team-api";
+import { bulkCreateMensalidades, createCaixa, listJogadores, listPagamentos, updatePerfilConfiguracao, upsertPagamento } from "@/lib/team-api";
+
+const DEFAULT_MENSALIDADE = 130;
 
 const PaymentsPage = () => {
   const queryClient = useQueryClient();
@@ -19,6 +21,16 @@ const PaymentsPage = () => {
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
   const [editedValues, setEditedValues] = useState<Record<number, string>>({});
+  const profileConfig = (profileData?.perfil?.configuracao_tema ?? {}) as Record<string, unknown>;
+  const persistedDefaultMensalidade =
+    Number(profileConfig.mensalidade_valor_padrao) > 0
+      ? Number(profileConfig.mensalidade_valor_padrao)
+      : DEFAULT_MENSALIDADE;
+  const [defaultMensalidadeInput, setDefaultMensalidadeInput] = useState(String(persistedDefaultMensalidade));
+
+  useEffect(() => {
+    setDefaultMensalidadeInput(String(persistedDefaultMensalidade));
+  }, [persistedDefaultMensalidade]);
 
   const playersQuery = useQuery({
     queryKey: ["players", perfilId],
@@ -36,13 +48,32 @@ const PaymentsPage = () => {
     mutationFn: async () => {
       if (!perfilId) return;
       const ids = (playersQuery.data || []).map((p) => p.id);
-      await bulkCreateMensalidades(perfilId, ids, mes, ano, 100);
+      await bulkCreateMensalidades(perfilId, ids, mes, ano, persistedDefaultMensalidade);
     },
     onSuccess: async () => {
       toast.success("Mensalidades geradas");
       await queryClient.invalidateQueries({ queryKey: ["payments", perfilId, mes, ano] });
     },
     onError: (error: any) => toast.error(error.message || "Falha ao gerar mensalidades"),
+  });
+
+  const saveDefaultMensalidadeMutation = useMutation({
+    mutationFn: async () => {
+      if (!perfilId) return;
+      const value = Number(defaultMensalidadeInput);
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error("Valor padrao invalido");
+      }
+      await updatePerfilConfiguracao(perfilId, {
+        ...profileConfig,
+        mensalidade_valor_padrao: value,
+      });
+    },
+    onSuccess: async () => {
+      toast.success("Valor padrao salvo");
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
+    onError: (error: any) => toast.error(error.message || "Falha ao salvar valor padrao"),
   });
 
   const savePaymentMutation = useMutation({
@@ -56,7 +87,7 @@ const PaymentsPage = () => {
         jogador_id: payment.jogador_id,
         mes,
         ano,
-        valor: Number(nextValor) || 100,
+        valor: Number(nextValor) || 130,
         status: nextStatus,
         data_vencimento: `${ano}-${String(mes).padStart(2, "0")}-10`,
         data_pagamento: nextStatus === "pago" ? new Date().toISOString().slice(0, 10) : null,
@@ -71,7 +102,7 @@ const PaymentsPage = () => {
           tipo: "entrada",
           categoria: "mensalidade",
           descricao: `Mensalidade ${mes}/${ano} - ${payment.jogador?.nome || payment.jogador_id}`,
-          valor: Number(nextValor) || 100,
+          valor: Number(nextValor) || 130,
           data_movimento: new Date().toISOString().slice(0, 10),
           metodo_pagamento: "pix",
         });
@@ -149,9 +180,28 @@ const PaymentsPage = () => {
       </div>
 
       {canManage && (
-        <button className="mt-4 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm" onClick={() => generateMonthMutation.mutate()}>
-          {generateMonthMutation.isPending ? "Gerando..." : "Gerar mensalidades do mes"}
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <label className="text-sm text-muted-foreground">Valor padrao (R$)</label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={defaultMensalidadeInput}
+            onChange={(e) => setDefaultMensalidadeInput(e.target.value)}
+            className="w-28 rounded-xl bg-muted/40 border border-border px-3 py-2"
+          />
+          {Number(defaultMensalidadeInput || 0) !== persistedDefaultMensalidade && (
+            <button
+              className="rounded-xl bg-muted/50 px-3 py-2 text-sm"
+              onClick={() => saveDefaultMensalidadeMutation.mutate()}
+            >
+              {saveDefaultMensalidadeMutation.isPending ? "Salvando..." : "Salvar valor padrao"}
+            </button>
+          )}
+          <button className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm" onClick={() => generateMonthMutation.mutate()}>
+            {generateMonthMutation.isPending ? "Gerando..." : "Gerar mensalidades do mes"}
+          </button>
+        </div>
       )}
 
       <div className="glass-card mt-4 overflow-auto">
