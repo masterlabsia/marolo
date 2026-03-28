@@ -3,11 +3,11 @@
       "context7": {
         "url": "https://mcp.context7.com/mcp",
         "headers": {
-          "CONTEXT7_API_KEY": "ctx7sk-f0ba0ef1-ecca-4e65-a6b6-f663298a93a5"
+          "CONTEXT7_API_KEY": ""
         }
       },
         "supabase": {
-      "url": "https://mcp.supabase.com/mcp"
+      "url": "p"
     }
       }
     }
