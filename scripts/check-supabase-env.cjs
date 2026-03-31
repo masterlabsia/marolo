@@ -1,4 +1,4 @@
-const required = ["https://cahnulqfdxpubqnvnqim.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhaG51bHFmZHhwdWJxbnZucWltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDMwNzcsImV4cCI6MjA4ODM3OTA3N30.KrRMwJpcyh2AqkKrHdxh4nlQPO1iNkzIo0D1rwLA978"];
+const required = ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"];
 
 const missing = required.filter((name) => {
   const value = process.env[name];
