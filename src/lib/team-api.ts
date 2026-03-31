@@ -124,7 +124,7 @@ export async function listPresencasByJogo(jogoId: number) {
 }
 
 export async function upsertPresenca(
-  payload: Pick<Presenca, "jogo_id" | "jogador_id" | "presente" | "gols" | "assistencias" | "notas">,
+  payload: Pick<Presenca, "jogo_id" | "jogador_id" | "presente" | "gols" | "assistencias" | "notas" | "cartoes" | "avaliacao">,
 ) {
   const cleanPayload = {
     jogo_id: payload.jogo_id,
@@ -132,7 +132,9 @@ export async function upsertPresenca(
     presente: payload.presente,
     gols: payload.gols,
     assistencias: payload.assistencias,
+    cartoes: payload.cartoes ?? null,
     notas: payload.notas ?? null,
+    avaliacao: payload.avaliacao ?? null,
   };
 
   const existing = await supabase
@@ -227,6 +229,34 @@ export async function listPagamentos(perfilId: number, mes: number, ano: number)
   })) as Pagamento[];
 }
 
+export async function listPagamentosInadimplentesAntesDe(perfilId: number, mes: number, ano: number) {
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("jogador_id, mes, ano, valor, status")
+    .eq("perfil_id", perfilId)
+    .neq("status", "pago");
+
+  if (error) throw error;
+
+  return ((data ?? []) as Pick<Pagamento, "jogador_id" | "mes" | "ano" | "valor" | "status">[]).filter(
+    (item) => item.ano < ano || (item.ano === ano && item.mes < mes),
+  );
+}
+
+export async function closePagamentosMes(perfilId: number, mes: number, ano: number) {
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .update({ status: "vencido" })
+    .eq("perfil_id", perfilId)
+    .eq("mes", mes)
+    .eq("ano", ano)
+    .eq("status", "pendente")
+    .select("id");
+
+  if (error) throw error;
+  return (data ?? []).length;
+}
+
 export async function upsertPagamento(
   perfilId: number,
   payload: Pick<Pagamento, "jogador_id" | "mes" | "ano" | "valor" | "status" | "data_vencimento" | "data_pagamento">,
@@ -243,12 +273,19 @@ export async function upsertPagamento(
 }
 
 export async function bulkCreateMensalidades(perfilId: number, jogadorIds: number[], mes: number, ano: number, valor = 130) {
+  const inadimplencias = await listPagamentosInadimplentesAntesDe(perfilId, mes, ano);
+  const carryByJogador = inadimplencias.reduce<Record<number, number>>((acc, row) => {
+    const jogadorId = Number(row.jogador_id);
+    acc[jogadorId] = (acc[jogadorId] || 0) + Number(row.valor || 0);
+    return acc;
+  }, {});
+
   const payload = jogadorIds.map((jogadorId) => ({
     perfil_id: perfilId,
     jogador_id: jogadorId,
     mes,
     ano,
-    valor,
+    valor: Number(valor) + Number(carryByJogador[jogadorId] || 0),
     status: "pendente",
     data_vencimento: `${ano}-${String(mes).padStart(2, "0")}-10`,
   }));

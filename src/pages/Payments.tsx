@@ -6,9 +6,23 @@ import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
 import { useProfile } from "@/hooks/useProfile";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { canManageRole } from "@/lib/permissions";
-import { bulkCreateMensalidades, createCaixa, listJogadores, listPagamentos, updatePerfilConfiguracao, upsertPagamento } from "@/lib/team-api";
+import {
+  bulkCreateMensalidades,
+  closePagamentosMes,
+  createCaixa,
+  listJogadores,
+  listPagamentos,
+  listPagamentosInadimplentesAntesDe,
+  updatePerfilConfiguracao,
+  upsertPagamento,
+} from "@/lib/team-api";
 
 const DEFAULT_MENSALIDADE = 130;
+
+function getPreviousMonthYear(month: number, year: number) {
+  if (month === 1) return { month: 12, year: year - 1 };
+  return { month: month - 1, year };
+}
 
 const PaymentsPage = () => {
   const queryClient = useQueryClient();
@@ -27,6 +41,11 @@ const PaymentsPage = () => {
       ? Number(profileConfig.mensalidade_valor_padrao)
       : DEFAULT_MENSALIDADE;
   const [defaultMensalidadeInput, setDefaultMensalidadeInput] = useState(String(persistedDefaultMensalidade));
+  const closedMonths = Array.isArray(profileConfig.fechamento_mensalidades)
+    ? (profileConfig.fechamento_mensalidades as string[])
+    : [];
+  const selectedMonthKey = `${ano}-${String(mes).padStart(2, "0")}`;
+  const isSelectedMonthClosed = closedMonths.includes(selectedMonthKey);
 
   useEffect(() => {
     setDefaultMensalidadeInput(String(persistedDefaultMensalidade));
@@ -44,17 +63,59 @@ const PaymentsPage = () => {
     queryFn: () => listPagamentos(perfilId as number, mes, ano),
   });
 
+  const previousDebtQuery = useQuery({
+    queryKey: ["payments-debt-before", perfilId, mes, ano],
+    enabled: Boolean(perfilId),
+    queryFn: () => listPagamentosInadimplentesAntesDe(perfilId as number, mes, ano),
+  });
+
   const generateMonthMutation = useMutation({
     mutationFn: async () => {
       if (!perfilId) return;
+      if (isSelectedMonthClosed) {
+        throw new Error("Mes selecionado ja esta fechado.");
+      }
+      const previous = getPreviousMonthYear(mes, ano);
+      const previousMonthKey = `${previous.year}-${String(previous.month).padStart(2, "0")}`;
+      if (!closedMonths.includes(previousMonthKey)) {
+        const previousMonthRows = await listPagamentos(perfilId, previous.month, previous.year);
+        if (previousMonthRows.length > 0) {
+          throw new Error(`Feche primeiro ${String(previous.month).padStart(2, "0")}/${previous.year} antes de gerar ${String(mes).padStart(2, "0")}/${ano}.`);
+        }
+      }
       const ids = (playersQuery.data || []).map((p) => p.id);
       await bulkCreateMensalidades(perfilId, ids, mes, ano, persistedDefaultMensalidade);
     },
     onSuccess: async () => {
-      toast.success("Mensalidades geradas");
+      toast.success("Mensalidades geradas com carregamento de inadimplencia anterior");
       await queryClient.invalidateQueries({ queryKey: ["payments", perfilId, mes, ano] });
+      await queryClient.invalidateQueries({ queryKey: ["payments-debt-before", perfilId, mes, ano] });
     },
     onError: (error: any) => toast.error(error.message || "Falha ao gerar mensalidades"),
+  });
+
+  const closeMonthMutation = useMutation({
+    mutationFn: async () => {
+      if (!perfilId) return 0;
+      if (isSelectedMonthClosed) {
+        return 0;
+      }
+      const updatedRows = await closePagamentosMes(perfilId, mes, ano);
+      const nextClosed = [...new Set([...closedMonths, selectedMonthKey])];
+      await updatePerfilConfiguracao(perfilId, {
+        ...profileConfig,
+        fechamento_mensalidades: nextClosed,
+      });
+      return updatedRows;
+    },
+    onSuccess: async (updatedRows) => {
+      toast.success(`Fechamento concluido: ${updatedRows || 0} pendencias movidas para vencido.`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payments", perfilId, mes, ano] }),
+        queryClient.invalidateQueries({ queryKey: ["profile"] }),
+      ]);
+    },
+    onError: (error: any) => toast.error(error.message || "Falha ao fechar cobranca do mes"),
   });
 
   const saveDefaultMensalidadeMutation = useMutation({
@@ -150,14 +211,33 @@ const PaymentsPage = () => {
   });
 
   const rows = paymentsQuery.data || [];
+  const previousDebtByJogador = useMemo(() => {
+    return (previousDebtQuery.data || []).reduce<Record<number, number>>((acc, row) => {
+      acc[row.jogador_id] = (acc[row.jogador_id] || 0) + Number(row.valor || 0);
+      return acc;
+    }, {});
+  }, [previousDebtQuery.data]);
+
   const summary = useMemo(() => {
+    const carryTotal = Object.values(previousDebtByJogador).reduce((acc, value) => acc + Number(value || 0), 0);
+    const baseTotal = rows.reduce(
+      (acc, r) => acc + Math.min(Number(r.valor || 0), Number(persistedDefaultMensalidade || 0)),
+      0,
+    );
+    const atrasoTotal = rows.reduce(
+      (acc, r) => acc + Math.max(0, Number(r.valor || 0) - Number(persistedDefaultMensalidade || 0)),
+      0,
+    );
     return {
       paid: rows.filter((p) => p.status === "pago").length,
       pending: rows.filter((p) => p.status === "pendente").length,
       overdue: rows.filter((p) => p.status === "vencido").length,
       total: rows.reduce((acc, r) => acc + Number(r.valor || 0), 0),
+      carryTotal,
+      baseTotal,
+      atrasoTotal,
     };
-  }, [rows]);
+  }, [persistedDefaultMensalidade, previousDebtByJogador, rows]);
 
   return (
     <AppShell>
@@ -176,8 +256,15 @@ const PaymentsPage = () => {
         <div className="glass-card"><p className="label-text">Pagos</p><p className="stat-number text-3xl">{summary.paid}</p></div>
         <div className="glass-card"><p className="label-text">Pendentes</p><p className="stat-number text-3xl">{summary.pending}</p></div>
         <div className="glass-card"><p className="label-text">Vencidos</p><p className="stat-number text-3xl">{summary.overdue}</p></div>
-        <div className="glass-card"><p className="label-text">Valor previsto</p><p className="stat-number text-3xl">{hidden ? "R$ ••••" : formatCurrency(summary.total)}</p></div>
+        <div className="glass-card"><p className="label-text">Valor previsto</p><p className="stat-number text-3xl">{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(summary.total)}</p></div>
       </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+        <div className="glass-card"><p className="label-text">Valor base</p><p className="stat-number text-2xl">{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(summary.baseTotal)}</p></div>
+        <div className="glass-card"><p className="label-text">Atraso carregado</p><p className="stat-number text-2xl">{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(summary.atrasoTotal)}</p></div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-2">
+        Inadimplencia acumulada antes de {String(mes).padStart(2, "0")}/{ano}: {hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(summary.carryTotal)}.
+      </p>
 
       {canManage && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -198,11 +285,27 @@ const PaymentsPage = () => {
               {saveDefaultMensalidadeMutation.isPending ? "Salvando..." : "Salvar valor padrao"}
             </button>
           )}
-          <button className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm" onClick={() => generateMonthMutation.mutate()}>
+          <button
+            disabled={isSelectedMonthClosed}
+            className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm disabled:opacity-50"
+            onClick={() => generateMonthMutation.mutate()}
+          >
             {generateMonthMutation.isPending ? "Gerando..." : "Gerar mensalidades do mes"}
+          </button>
+          <button
+            disabled={isSelectedMonthClosed}
+            className="rounded-xl bg-warning/20 text-warning px-4 py-2.5 text-sm disabled:opacity-50"
+            onClick={() => closeMonthMutation.mutate()}
+          >
+            {closeMonthMutation.isPending ? "Fechando..." : isSelectedMonthClosed ? "Mes fechado" : "Fechar cobranca do mes"}
           </button>
         </div>
       )}
+      <p className={`text-xs mt-2 ${isSelectedMonthClosed ? "text-warning" : "text-muted-foreground"}`}>
+        {isSelectedMonthClosed
+          ? `Cobranca de ${String(mes).padStart(2, "0")}/${ano} fechada. Edicoes e nova geracao bloqueadas.`
+          : "Mes em aberto para ajustes e fechamento."}
+      </p>
 
       <div className="glass-card mt-4 overflow-auto">
         <table className="w-full text-sm">
@@ -211,7 +314,9 @@ const PaymentsPage = () => {
               <th className="text-left py-2">Jogador</th>
               <th className="text-left py-2">Status</th>
               <th className="text-left py-2">Vencimento</th>
-              <th className="text-left py-2">Valor</th>
+              <th className="text-left py-2">Base</th>
+              <th className="text-left py-2">Atraso</th>
+              <th className="text-left py-2">Valor total</th>
               {canManage && <th className="text-right py-2">Acoes</th>}
             </tr>
           </thead>
@@ -222,22 +327,39 @@ const PaymentsPage = () => {
                 <td className="py-2 capitalize">{payment.status}</td>
                 <td className="py-2">{formatDate(payment.data_vencimento)}</td>
                 <td className="py-2">
+                  {hidden
+                    ? "R$ â€¢â€¢â€¢â€¢"
+                    : formatCurrency(Math.min(Number(payment.valor || 0), Number(persistedDefaultMensalidade || 0)))}
+                </td>
+                <td className="py-2">
+                  {hidden
+                    ? "R$ â€¢â€¢â€¢â€¢"
+                    : formatCurrency(Math.max(0, Number(payment.valor || 0) - Number(persistedDefaultMensalidade || 0)))}
+                </td>
+                <td className="py-2">
+                  {!hidden && Number(previousDebtByJogador[payment.jogador_id] || 0) > 0 && (
+                    <p className="text-[11px] text-warning mb-1">
+                      Inclui atraso anterior: {formatCurrency(Number(previousDebtByJogador[payment.jogador_id] || 0))}
+                    </p>
+                  )}
                   {canManage && !hidden ? (
                     <input
+                      disabled={isSelectedMonthClosed}
                       type="number"
                       step="0.01"
                       value={editedValues[payment.id] ?? String(payment.valor)}
                       onChange={(e) => setEditedValues((p) => ({ ...p, [payment.id]: e.target.value }))}
-                      className="w-28 rounded-lg bg-muted/40 border border-border px-2 py-1"
+                      className="w-28 rounded-lg bg-muted/40 border border-border px-2 py-1 disabled:opacity-50"
                     />
                   ) : (
-                    hidden ? "R$ ••••" : formatCurrency(Number(payment.valor))
+                    hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(Number(payment.valor))
                   )}
                 </td>
                 {canManage && (
                   <td className="py-2 text-right space-x-1">
                     {!hidden && Number(editedValues[payment.id] ?? payment.valor) !== Number(payment.valor) && (
                       <button
+                        disabled={isSelectedMonthClosed}
                         className="text-xs px-2 py-1 rounded-lg bg-primary/20 text-primary"
                         onClick={() =>
                           savePaymentMutation.mutate({
@@ -251,6 +373,7 @@ const PaymentsPage = () => {
                     )}
                     {payment.status !== "pago" && (
                       <button
+                        disabled={isSelectedMonthClosed}
                         className="text-xs px-2 py-1 rounded-lg bg-success/20 text-success"
                         onClick={() =>
                           savePaymentMutation.mutate({
@@ -265,6 +388,7 @@ const PaymentsPage = () => {
                     )}
                     {payment.status === "pago" && (
                       <button
+                        disabled={isSelectedMonthClosed}
                         className="text-xs px-2 py-1 rounded-lg bg-warning/20 text-warning"
                         onClick={() =>
                           savePaymentMutation.mutate({
