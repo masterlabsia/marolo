@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
 import { useMonetaryPrivacy } from "@/hooks/useMonetaryPrivacy";
@@ -110,6 +111,7 @@ const PaymentsPage = () => {
     },
     onSuccess: async (updatedRows) => {
       toast.success(`Fechamento concluido: ${updatedRows || 0} pendencias movidas para vencido.`);
+      toast.info("Relatorio mensal pronto para exportacao em Relatorios.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["payments", perfilId, mes, ano] }),
         queryClient.invalidateQueries({ queryKey: ["profile"] }),
@@ -299,6 +301,9 @@ const PaymentsPage = () => {
           >
             {closeMonthMutation.isPending ? "Fechando..." : isSelectedMonthClosed ? "Mes fechado" : "Fechar cobranca do mes"}
           </button>
+          <Link to={`/relatorios?mes=${mes}&ano=${ano}`} className="rounded-xl bg-muted/50 px-4 py-2.5 text-sm">
+            Relatorio PDF e envio
+          </Link>
         </div>
       )}
       <p className={`text-xs mt-2 ${isSelectedMonthClosed ? "text-warning" : "text-muted-foreground"}`}>

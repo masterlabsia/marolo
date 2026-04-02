@@ -123,6 +123,22 @@ export async function listPresencasByJogo(jogoId: number) {
   })) as Presenca[];
 }
 
+export async function listPresencasByJogador(perfilId: number, jogadorId: number) {
+  const { data, error } = await supabase
+    .from("presencas")
+    .select("*, jogos!inner(id, perfil_id, data_hora, adversario, status, resultado)")
+    .eq("jogador_id", jogadorId)
+    .eq("jogos.perfil_id", perfilId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((item: any) => ({
+    ...item,
+    jogo: item.jogos,
+  })) as Presenca[];
+}
+
 export async function upsertPresenca(
   payload: Pick<Presenca, "jogo_id" | "jogador_id" | "presente" | "gols" | "assistencias" | "notas" | "cartoes" | "avaliacao">,
 ) {
@@ -220,6 +236,23 @@ export async function listPagamentos(perfilId: number, mes: number, ano: number)
     .eq("mes", mes)
     .eq("ano", ano)
     .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((item: any) => ({
+    ...item,
+    jogador: item.jogadores,
+  })) as Pagamento[];
+}
+
+export async function listPagamentosByJogador(perfilId: number, jogadorId: number) {
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("*, jogadores(id, nome)")
+    .eq("perfil_id", perfilId)
+    .eq("jogador_id", jogadorId)
+    .order("ano", { ascending: false })
+    .order("mes", { ascending: false });
 
   if (error) throw error;
 
