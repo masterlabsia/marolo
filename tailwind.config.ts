@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
-        body: ["Inter", "system-ui", "sans-serif"],
+        display: ['"Bricolage Grotesque"', "system-ui", "sans-serif"],
+        body: ['"Public Sans"', "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "monospace"],
       },
       colors: {

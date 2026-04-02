@@ -14,6 +14,8 @@ import PaymentsPage from "@/pages/Payments";
 import PlayersPage from "@/pages/Players";
 import CashPage from "@/pages/Cash";
 import StatsPage from "@/pages/Stats";
+import ReportsPage from "@/pages/Reports";
+import PlayerTimelinePage from "@/pages/PlayerTimeline";
 import AuthLoginPage from "@/pages/AuthLogin";
 import NotFound from "@/pages/NotFound";
 
@@ -47,11 +49,13 @@ const App = () => (
                 <Route element={<ProtectedRoute />}>
                   <Route path="/" element={<Index />} />
                   <Route path="/jogadores" element={<PlayersPage />} />
+                  <Route path="/jogadores/:playerId" element={<PlayerTimelinePage />} />
                   <Route path="/jogos" element={<GamesPage />} />
                   <Route path="/presenca" element={<PresencePage />} />
                   <Route path="/pagamentos" element={<PaymentsPage />} />
                   <Route path="/caixa" element={<CashPage />} />
                   <Route path="/estatisticas" element={<StatsPage />} />
+                  <Route path="/relatorios" element={<ReportsPage />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

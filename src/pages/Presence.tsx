@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
+import { enqueuePresenceUpdates, flushPresenceQueue, listPresenceQueue } from "@/lib/offline-queue";
 import { canManageRole } from "@/lib/permissions";
 import { listJogadores, listJogos, listPresencasByJogo, upsertPresenca } from "@/lib/team-api";
 
@@ -69,6 +70,10 @@ const PresencePage = () => {
   const { data: profileData } = useProfile();
   const perfilId = profileData?.perfil?.id;
   const canManage = canManageRole(profileData?.role);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
+  const [queuedCount, setQueuedCount] = useState(() => listPresenceQueue().length);
 
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
   const [editedRows, setEditedRows] = useState<Record<number, PresenceRowState>>({});
@@ -94,25 +99,34 @@ const PresencePage = () => {
   const saveBatchMutation = useMutation({
     mutationFn: async (rowsToSave: PresenceRowState[]) => {
       if (!selectedGameId) return;
-      await Promise.all(
-        rowsToSave.map((row) =>
-          upsertPresenca({
-            jogo_id: selectedGameId,
-            jogador_id: row.jogador_id,
-            presente: row.presente,
-            gols: row.gols,
-            assistencias: row.assistencias,
-            cartoes: {
-              amarelo: row.cartaoAmarelo,
-              vermelho: row.cartaoVermelho,
-            },
-            avaliacao: Math.round(row.avaliacao),
-            notas: buildNotas(row.meta),
-          }),
-        ),
-      );
+      const payloads = rowsToSave.map((row) => ({
+        jogo_id: selectedGameId,
+        jogador_id: row.jogador_id,
+        presente: row.presente,
+        gols: row.gols,
+        assistencias: row.assistencias,
+        cartoes: {
+          amarelo: row.cartaoAmarelo,
+          vermelho: row.cartaoVermelho,
+        },
+        avaliacao: Math.round(row.avaliacao),
+        notas: buildNotas(row.meta),
+      }));
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const total = enqueuePresenceUpdates(payloads);
+        return { queued: true, total };
+      }
+
+      await Promise.all(payloads.map((payload) => upsertPresenca(payload)));
+      return { queued: false, total: 0 };
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      if (result?.queued) {
+        setQueuedCount(result.total);
+        toast.info(`Sem internet: ${result.total} atualizacoes ficaram na fila offline`);
+        return;
+      }
       toast.success("Presencas e scout salvos em lote");
       await queryClient.invalidateQueries({ queryKey: ["attendance", selectedGameId] });
       await queryClient.invalidateQueries({ queryKey: ["attendance-all"] });
@@ -148,6 +162,43 @@ const PresencePage = () => {
     });
     setEditedRows(next);
   }, [rows]);
+
+  useEffect(() => {
+    let syncing = false;
+    const syncQueuedChanges = async () => {
+      if (syncing) return;
+      syncing = true;
+      const result = await flushPresenceQueue();
+      setQueuedCount(result.failed);
+      if (result.sent > 0) {
+        toast.success(`Sincronizacao concluida: ${result.sent} atualizacoes enviadas`);
+        await queryClient.invalidateQueries({ queryKey: ["attendance", selectedGameId] });
+        await queryClient.invalidateQueries({ queryKey: ["attendance-all"] });
+      }
+      syncing = false;
+    };
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncQueuedChanges();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      syncQueuedChanges();
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [queryClient, selectedGameId]);
 
   const dirtyCount = useMemo(() => {
     return rows.reduce((count, row) => {
@@ -203,6 +254,17 @@ const PresencePage = () => {
     <AppShell>
       <h1 className="text-2xl md:text-3xl font-display font-bold">Presenca Avancada e Scout</h1>
       <p className="text-sm text-muted-foreground mb-6">Edite todos os dados do jogo e salve em lote uma unica vez.</p>
+
+      {!isOnline && (
+        <div className="glass-card mb-4 text-sm">
+          Modo offline ativo. Alteracoes serao salvas localmente e sincronizadas quando a internet voltar.
+        </div>
+      )}
+      {queuedCount > 0 && (
+        <div className="glass-card mb-4 text-sm">
+          Fila offline pendente: {queuedCount} alteracoes aguardando sincronizacao.
+        </div>
+      )}
 
       <div className="glass-card mb-4">
         <label className="text-xs text-muted-foreground">Jogo</label>

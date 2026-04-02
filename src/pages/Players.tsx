@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
@@ -123,7 +124,7 @@ const PlayersPage = () => {
                 <th className="text-left py-2">Posicao</th>
                 <th className="text-left py-2">Camisa</th>
                 <th className="text-left py-2">Tags</th>
-                {canManage && <th className="text-right py-2">Acoes</th>}
+                <th className="text-right py-2">Acoes</th>
               </tr>
             </thead>
             <tbody>
@@ -133,29 +134,34 @@ const PlayersPage = () => {
                   <td className="py-2">{player.posicao || "-"}</td>
                   <td className="py-2">{player.numero_camisa || "-"}</td>
                   <td className="py-2">{(player.tags || []).join(", ") || "-"}</td>
-                  {canManage && (
-                    <td className="py-2 text-right">
-                      <button
-                        className="text-xs px-2 py-1 rounded-lg bg-muted/40 mr-1"
-                        onClick={() => {
-                          setEditingId(player.id);
-                          setForm({
-                            nome: player.nome,
-                            posicao: player.posicao || "",
-                            numero_camisa: player.numero_camisa ? String(player.numero_camisa) : "",
-                            telefone: player.telefone || "",
-                            email: player.email || "",
-                            tags: (player.tags || []).join(","),
-                          });
-                        }}
-                      >
-                        Editar
-                      </button>
-                      <button className="text-xs px-2 py-1 rounded-lg bg-destructive/20 text-destructive" onClick={() => deleteMutation.mutate(player.id)}>
-                        Remover
-                      </button>
-                    </td>
-                  )}
+                  <td className="py-2 text-right">
+                    <Link to={`/jogadores/${player.id}`} className="text-xs px-2 py-1 rounded-lg bg-muted/40 mr-1 inline-block">
+                      Timeline
+                    </Link>
+                    {canManage && (
+                      <>
+                        <button
+                          className="text-xs px-2 py-1 rounded-lg bg-muted/40 mr-1"
+                          onClick={() => {
+                            setEditingId(player.id);
+                            setForm({
+                              nome: player.nome,
+                              posicao: player.posicao || "",
+                              numero_camisa: player.numero_camisa ? String(player.numero_camisa) : "",
+                              telefone: player.telefone || "",
+                              email: player.email || "",
+                              tags: (player.tags || []).join(","),
+                            });
+                          }}
+                        >
+                          Editar
+                        </button>
+                        <button className="text-xs px-2 py-1 rounded-lg bg-destructive/20 text-destructive" onClick={() => deleteMutation.mutate(player.id)}>
+                          Remover
+                        </button>
+                      </>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

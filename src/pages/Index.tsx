@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { AlertTriangle, ArrowUpRight, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
@@ -14,6 +15,7 @@ const Index = () => {
   const { data: profileData, isLoading: loadingProfile } = useProfile();
   const { hidden } = useMonetaryPrivacy();
   const canManage = canManageRole(profileData?.role);
+  const HIDDEN_VALUE = "R$ ••••";
 
   const perfilId = profileData?.perfil?.id;
 
@@ -175,6 +177,27 @@ const Index = () => {
 
     const totalPagamentos = pendentes + adimplentes;
     const inadimplenciaRate = totalPagamentos > 0 ? (pendentes / totalPagamentos) * 100 : 0;
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const dayOfMonth = Math.max(1, Math.min(now.getDate(), daysInMonth));
+    const projectionFactor = daysInMonth / dayOfMonth;
+    const projectedEntradasMes = totalEntradasMes * projectionFactor;
+    const projectedSaidasMes = totalSaidasMes * projectionFactor;
+    const projectedResultadoMes = projectedEntradasMes - projectedSaidasMes;
+    const projectedSaldoFimMes = saldo + (projectedResultadoMes - resultadoMes);
+
+    const recentWindowStart = new Date();
+    recentWindowStart.setDate(recentWindowStart.getDate() - 30);
+    const recentMovements = caixa.filter((mov) => {
+      const dt = new Date(`${mov.data_movimento}T00:00:00`);
+      return dt >= recentWindowStart;
+    });
+    const recentNet = recentMovements.reduce((acc, mov) => acc + (mov.tipo === "entrada" ? Number(mov.valor || 0) : -Number(mov.valor || 0)), 0);
+    const burnPerDay = Math.max(0, -recentNet / 30);
+    const daysToNegativeCash = burnPerDay > 0 && saldo > 0 ? saldo / burnPerDay : null;
+
+    const paidRate = totalPagamentos > 0 ? (adimplentes / totalPagamentos) * 100 : 0;
+    const expectedPaidRateByToday = (dayOfMonth / daysInMonth) * 100;
+
     const alerts: string[] = [];
     if (inadimplenciaRate >= 30) {
       alerts.push(`Inadimplencia elevada: ${inadimplenciaRate.toFixed(0)}%`);
@@ -184,6 +207,15 @@ const Index = () => {
     }
     if (historicalAvgExpense > 0 && currentMonthCash.saidas > historicalAvgExpense * 1.3) {
       alerts.push("Despesas do mes atual acima da media historica");
+    }
+    if (projectedSaldoFimMes < 0) {
+      alerts.push(`Projecao de caixa no fim do mes negativa: ${formatCurrency(projectedSaldoFimMes)}`);
+    }
+    if (daysToNegativeCash !== null && daysToNegativeCash <= 45) {
+      alerts.push(`Risco de caixa zerar em ~${Math.max(1, Math.round(daysToNegativeCash))} dias no ritmo atual`);
+    }
+    if (totalPagamentos > 0 && paidRate + 15 < expectedPaidRateByToday) {
+      alerts.push(`Risco de atraso nas cobrancas: adimplencia atual ${paidRate.toFixed(0)}% abaixo do esperado para o dia`);
     }
 
     const financialGoal = persistedGoal;
@@ -214,6 +246,13 @@ const Index = () => {
         resultadoMes,
         saidasDetalhadasMes,
       },
+      predictive: {
+        projectedEntradasMes,
+        projectedSaidasMes,
+        projectedResultadoMes,
+        projectedSaldoFimMes,
+        daysToNegativeCash,
+      },
     };
   }, [attendanceForAllGames.data, attendanceForLastGames.data, cashQuery.data, gamesQuery.data, paymentsQuery.data, persistedDefaultMensalidade, persistedGoal, playersQuery.data]);
 
@@ -238,13 +277,28 @@ const Index = () => {
 
   return (
     <AppShell>
-      <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Dashboard</h1>
-      <p className="text-sm text-muted-foreground mt-1 mb-6">Visao geral do time e indicadores em tempo real.</p>
+      <section className="glass-card kpi-glow mb-4 md:mb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="panel-title mb-2">Painel Central</p>
+            <h1 className="text-2xl md:text-4xl font-display font-bold text-foreground">Dashboard do Time</h1>
+            <p className="text-sm text-muted-foreground mt-2 text-pretty">Visao geral com sinais financeiros, operacionais e esportivos para priorizar a proxima acao.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+              <ShieldCheck className="h-3.5 w-3.5" /> Monitoramento ativo
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
+              <Sparkles className="h-3.5 w-3.5" /> Atualizado em tempo real
+            </span>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card"><p className="label-text">Jogadores</p><p className="stat-number text-3xl">{dashboard.totalJogadores}</p></div>
-        <div className="glass-card"><p className="label-text">Pagamentos pendentes</p><p className="stat-number text-3xl">{dashboard.pendentes}</p></div>
-        <div className="glass-card"><p className="label-text">Caixa</p><p className="stat-number text-3xl">{hidden ? "R$ ••••" : formatCurrency(dashboard.saldo)}</p></div>
+        <div className="glass-card"><p className="label-text">Jogadores</p><p className="metric-value">{dashboard.totalJogadores}</p></div>
+        <div className="glass-card"><p className="label-text">Pagamentos pendentes</p><p className="metric-value">{dashboard.pendentes}</p></div>
+        <div className="glass-card"><p className="label-text">Caixa</p><p className="metric-value">{hidden ? HIDDEN_VALUE : formatCurrency(dashboard.saldo)}</p></div>
         <div className="glass-card">
           <p className="label-text">Proximo jogo</p>
           <p className="text-sm font-medium mt-2">{dashboard.proximoJogo ? `vs ${dashboard.proximoJogo.adversario}` : "-"}</p>
@@ -253,8 +307,8 @@ const Index = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-        <div className="glass-card"><p className="label-text">Cobranca base (mes)</p><p className="stat-number text-3xl">{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.pagamentos.baseMes)}</p></div>
-        <div className="glass-card"><p className="label-text">Atraso carregado (mes)</p><p className="stat-number text-3xl">{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.pagamentos.atrasoMes)}</p></div>
+        <div className="glass-card"><p className="label-text">Cobranca base (mes)</p><p className="metric-value">{hidden ? HIDDEN_VALUE : formatCurrency(dashboard.pagamentos.baseMes)}</p></div>
+        <div className="glass-card"><p className="label-text">Atraso carregado (mes)</p><p className="metric-value">{hidden ? HIDDEN_VALUE : formatCurrency(dashboard.pagamentos.atrasoMes)}</p></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
@@ -323,7 +377,7 @@ const Index = () => {
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           {dashboard.goal.target > 0
-            ? `${dashboard.goal.progress.toFixed(1)}% da meta atingida (${hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.goal.currentEntradas)} de ${hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.goal.target)})`
+            ? `${dashboard.goal.progress.toFixed(1)}% da meta atingida (${hidden ? HIDDEN_VALUE : formatCurrency(dashboard.goal.currentEntradas)} de ${hidden ? HIDDEN_VALUE : formatCurrency(dashboard.goal.target)})`
             : "Defina uma meta para acompanhar o progresso mensal."}
         </p>
       </div>
@@ -331,12 +385,25 @@ const Index = () => {
       <div className="glass-card mt-4">
         <h2 className="font-semibold mb-3">Alertas inteligentes</h2>
         <div className="space-y-2 text-sm">
-          {dashboard.alerts.length === 0 && <p className="text-muted-foreground">Nenhum alerta critico no momento.</p>}
+          {dashboard.alerts.length === 0 && (
+            <p className="text-muted-foreground inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-success" /> Nenhum alerta critico no momento.
+            </p>
+          )}
           {dashboard.alerts.map((alert) => (
-            <div key={alert} className="rounded-xl bg-warning/10 text-warning px-3 py-2">
+            <div key={alert} className="rounded-xl bg-warning/10 text-warning px-3 py-2 inline-flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
               {alert}
             </div>
           ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3 text-xs">
+          <div className="rounded-xl bg-muted/20 px-3 py-2">
+            Projecao de resultado no fim do mes: {hidden ? HIDDEN_VALUE : formatCurrency(dashboard.predictive.projectedResultadoMes)}
+          </div>
+          <div className="rounded-xl bg-muted/20 px-3 py-2">
+            Projecao de saldo no fim do mes: {hidden ? HIDDEN_VALUE : formatCurrency(dashboard.predictive.projectedSaldoFimMes)}
+          </div>
         </div>
       </div>
 
@@ -347,15 +414,15 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
           <div className="rounded-xl bg-muted/20 px-3 py-2 flex items-center justify-between">
             <span>Receitas</span>
-            <span>{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.dre.totalEntradasMes)}</span>
+            <span>{hidden ? HIDDEN_VALUE : formatCurrency(dashboard.dre.totalEntradasMes)}</span>
           </div>
           <div className="rounded-xl bg-muted/20 px-3 py-2 flex items-center justify-between">
             <span>Despesas</span>
-            <span>{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.dre.totalSaidasMes)}</span>
+            <span>{hidden ? HIDDEN_VALUE : formatCurrency(dashboard.dre.totalSaidasMes)}</span>
           </div>
           <div className="rounded-xl bg-muted/20 px-3 py-2 flex items-center justify-between">
             <span>Resultado</span>
-            <span>{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(dashboard.dre.resultadoMes)}</span>
+            <span>{hidden ? HIDDEN_VALUE : formatCurrency(dashboard.dre.resultadoMes)}</span>
           </div>
         </div>
 
@@ -367,7 +434,7 @@ const Index = () => {
             <div key={mov.id} className="rounded-xl bg-muted/20 px-3 py-2">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-medium">{mov.descricao || "Sem descricao"}</span>
-                <span>{hidden ? "R$ â€¢â€¢â€¢â€¢" : formatCurrency(Number(mov.valor || 0))}</span>
+                <span>{hidden ? HIDDEN_VALUE : formatCurrency(Number(mov.valor || 0))}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {mov.data_movimento} {mov.categoria ? `• ${mov.categoria}` : ""}
@@ -382,8 +449,12 @@ const Index = () => {
         <div className="flex flex-wrap gap-2">
           {canManage && (
             <>
-              <Link to="/jogos" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogo</Link>
-              <Link to="/jogadores" className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">+ Novo jogador</Link>
+              <Link to="/jogos" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">
+                + Novo jogo <ArrowUpRight className="h-4 w-4" />
+              </Link>
+              <Link to="/jogadores" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm">
+                + Novo jogador <ArrowUpRight className="h-4 w-4" />
+              </Link>
             </>
           )}
           <Link to="/estatisticas" className="px-3 py-2 rounded-xl bg-muted/40 text-sm">Ver estatisticas</Link>
@@ -395,3 +466,8 @@ const Index = () => {
 };
 
 export default Index;
+
+
+
+
+

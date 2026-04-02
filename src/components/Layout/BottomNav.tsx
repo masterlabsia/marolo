@@ -1,5 +1,5 @@
 import { useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Trophy, ClipboardCheck, Wallet, Users } from "lucide-react";
+import { LayoutDashboard, Trophy, ClipboardCheck, Wallet, Users, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 
 const navItems = [
@@ -8,14 +8,15 @@ const navItems = [
   { path: "/jogos", icon: Trophy, label: "Jogos" },
   { path: "/presenca", icon: ClipboardCheck, label: "Presenca" },
   { path: "/pagamentos", icon: Wallet, label: "Pagamentos" },
+  { path: "/relatorios", icon: FileText, label: "Relatorios" },
 ];
 
 const BottomNav = () => {
   const location = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-background/90 backdrop-blur-xl md:hidden">
-      <div className="flex items-center justify-around h-16 px-2">
+    <nav className="fixed bottom-3 left-0 right-0 z-50 px-3 md:hidden">
+      <div className="mx-auto max-w-xl flex items-center justify-around h-16 px-2 border border-border/70 rounded-2xl bg-card/80 backdrop-blur-xl shadow-[0_16px_30px_hsl(220_45%_4%_/_0.45)]">
         {navItems.map(({ path, icon: Icon, label }) => {
           const isActive = location.pathname === path;
           return (
@@ -23,7 +24,7 @@ const BottomNav = () => {
               key={path}
               to={path}
               className={`relative flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground"
+                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Icon size={20} strokeWidth={1.5} />

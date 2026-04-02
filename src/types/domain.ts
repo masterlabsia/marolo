@@ -45,6 +45,7 @@ export interface Presenca {
   notas: string | null;
   avaliacao: number | null;
   jogador?: Pick<Jogador, "id" | "nome">;
+  jogo?: Pick<Jogo, "id" | "data_hora" | "adversario" | "status" | "resultado">;
 }
 
 export interface Pagamento {
