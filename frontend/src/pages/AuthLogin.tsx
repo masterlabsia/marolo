@@ -4,27 +4,31 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabaseEnvError } from "@/lib/supabase";
 
+// Mapa de usernames para emails no Supabase cloud (produção)
 const USERNAME_EMAIL_MAP: Record<string, string> = {
-  admin_marolo: "admin_marolo@marolo.app",
   marolo: "marolo@marolo.app",
+  admin_marolo: "admin_marolo@marolo.app",
 };
+
+function resolveEmail(input: string): string {
+  if (input.includes("@")) return input; // já é email
+  const mapped = USERNAME_EMAIL_MAP[input.toLowerCase()];
+  if (!mapped) throw new Error("Usuario invalido.");
+  return mapped;
+}
 
 const AuthLoginPage = () => {
   const navigate = useNavigate();
   const { signIn } = useAuth();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("1234567890");
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const normalized = username.trim().toLowerCase();
-      const email = USERNAME_EMAIL_MAP[normalized];
-      if (!email) {
-        throw new Error("Usuario invalido. Use admin_marolo ou marolo.");
-      }
+      const email = resolveEmail(login.trim());
       await signIn(email, password);
       navigate("/");
     } catch (error: any) {
@@ -38,7 +42,7 @@ const AuthLoginPage = () => {
     <div className="min-h-screen bg-background grid place-items-center p-4">
       <div className="w-full max-w-md glass-card">
         <h1 className="text-2xl font-display font-bold">Entrar</h1>
-        <p className="text-sm text-muted-foreground mt-1">Login consultivo por usuario.</p>
+        <p className="text-sm text-muted-foreground mt-1">Usuario ou email.</p>
         {supabaseEnvError && (
           <p className="mt-3 text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">
             Ambiente sem variaveis VITE do Supabase. Configure no deploy para liberar login.
@@ -52,10 +56,10 @@ const AuthLoginPage = () => {
               type="text"
               required
               autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
               className="mt-1 w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
-              placeholder=""
+              placeholder="marolo ou seu@email.com"
             />
           </div>
           <div>
@@ -70,9 +74,6 @@ const AuthLoginPage = () => {
               className="mt-1 w-full rounded-xl bg-muted/40 border border-border px-3 py-2.5"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Usuarios padrao: <strong>marolo</strong>. Senha padrao: <strong>marolo</strong>.
-          </p>
           <button
             disabled={loading}
             className="w-full rounded-xl bg-primary text-primary-foreground py-2.5 font-medium disabled:opacity-50"

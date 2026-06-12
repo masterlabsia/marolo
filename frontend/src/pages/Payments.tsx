@@ -84,7 +84,8 @@ const PaymentsPage = () => {
           throw new Error(`Feche primeiro ${String(previous.month).padStart(2, "0")}/${previous.year} antes de gerar ${String(mes).padStart(2, "0")}/${ano}.`);
         }
       }
-      const ids = (playersQuery.data || []).map((p) => p.id);
+      const ids = (playersQuery.data || []).filter((p) => p.tipo !== "diarista").map((p) => p.id);
+      if (ids.length === 0) throw new Error("Nenhum jogador mensalista encontrado.");
       await bulkCreateMensalidades(perfilId, ids, mes, ano, persistedDefaultMensalidade);
     },
     onSuccess: async () => {

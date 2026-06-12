@@ -12,10 +12,16 @@ const emptyForm = {
   nome: "",
   posicao: "",
   numero_camisa: "",
-  telefone: "",
-  email: "",
   tags: "",
+  tipo: "mensalista" as "mensalista" | "diarista",
 };
+
+const TipoBadge = ({ tipo }: { tipo: Jogador["tipo"] }) =>
+  tipo === "diarista" ? (
+    <span className="inline-block text-xs px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-medium">Diarista</span>
+  ) : (
+    <span className="inline-block text-xs px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-400 font-medium">Mensalista</span>
+  );
 
 const PlayersPage = () => {
   const queryClient = useQueryClient();
@@ -40,9 +46,8 @@ const PlayersPage = () => {
         nome: form.nome,
         posicao: form.posicao || null,
         numero_camisa: form.numero_camisa ? Number(form.numero_camisa) : null,
-        telefone: form.telefone || null,
-        email: form.email || null,
         tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : null,
+        tipo: form.tipo,
       };
 
       if (editingId) {
@@ -93,9 +98,32 @@ const PlayersPage = () => {
             <input required value={form.nome} onChange={(e) => setForm((p) => ({ ...p, nome: e.target.value }))} placeholder="Nome" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
             <input value={form.posicao} onChange={(e) => setForm((p) => ({ ...p, posicao: e.target.value }))} placeholder="Posicao" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
             <input type="number" min={1} max={99} value={form.numero_camisa} onChange={(e) => setForm((p) => ({ ...p, numero_camisa: e.target.value }))} placeholder="Numero" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
-            <input value={form.telefone} onChange={(e) => setForm((p) => ({ ...p, telefone: e.target.value }))} placeholder="Telefone" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
-            <input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
             <input value={form.tags} onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))} placeholder="Tags (capitao,reserva)" className="rounded-xl bg-muted/40 border border-border px-3 py-2.5" />
+            <div className="md:col-span-2">
+              <label className="text-xs text-muted-foreground block mb-1">Tipo</label>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="mensalista"
+                    checked={form.tipo === "mensalista"}
+                    onChange={() => setForm((p) => ({ ...p, tipo: "mensalista" }))}
+                  />
+                  <span className="text-sm">Mensalista</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="diarista"
+                    checked={form.tipo === "diarista"}
+                    onChange={() => setForm((p) => ({ ...p, tipo: "diarista" }))}
+                  />
+                  <span className="text-sm">Diarista (avulso, sem mensalidade)</span>
+                </label>
+              </div>
+            </div>
             <div className="md:col-span-2 flex gap-2">
               <button type="submit" className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm">
                 {upsertMutation.isPending ? "Salvando..." : editingId ? "Atualizar" : "Criar"}
@@ -121,6 +149,7 @@ const PlayersPage = () => {
             <thead className="border-b border-border/60 text-muted-foreground">
               <tr>
                 <th className="text-left py-2">Nome</th>
+                <th className="text-left py-2">Tipo</th>
                 <th className="text-left py-2">Posicao</th>
                 <th className="text-left py-2">Camisa</th>
                 <th className="text-left py-2">Tags</th>
@@ -131,6 +160,9 @@ const PlayersPage = () => {
               {rows.map((player) => (
                 <tr key={player.id} className="border-b border-border/40">
                   <td className="py-2">{player.nome}</td>
+                  <td className="py-2">
+                    <TipoBadge tipo={player.tipo ?? "mensalista"} />
+                  </td>
                   <td className="py-2">{player.posicao || "-"}</td>
                   <td className="py-2">{player.numero_camisa || "-"}</td>
                   <td className="py-2">{(player.tags || []).join(", ") || "-"}</td>
@@ -148,9 +180,8 @@ const PlayersPage = () => {
                               nome: player.nome,
                               posicao: player.posicao || "",
                               numero_camisa: player.numero_camisa ? String(player.numero_camisa) : "",
-                              telefone: player.telefone || "",
-                              email: player.email || "",
                               tags: (player.tags || []).join(","),
+                              tipo: player.tipo ?? "mensalista",
                             });
                           }}
                         >

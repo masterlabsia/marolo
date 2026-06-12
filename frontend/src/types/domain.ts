@@ -20,6 +20,7 @@ export interface Jogador {
   email: string | null;
   tags: string[] | null;
   ativo: boolean;
+  tipo: "mensalista" | "diarista";
 }
 
 export interface Jogo {

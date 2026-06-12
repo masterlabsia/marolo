@@ -339,3 +339,18 @@ create index if not exists idx_jogos_perfil_data on public.jogos(perfil_id, data
 create index if not exists idx_presencas_jogo on public.presencas(jogo_id);
 create index if not exists idx_pagamentos_perfil_mes_ano on public.pagamentos(perfil_id, mes, ano);
 create index if not exists idx_caixa_perfil_data on public.caixa(perfil_id, data_movimento desc);
+
+-- =====================================================
+-- Grants (necessário no Supabase CLI local — o cloud aplica automaticamente)
+-- =====================================================
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select, insert, update, delete on public.perfis    to anon, authenticated, service_role;
+grant select, insert, update, delete on public.jogadores to anon, authenticated, service_role;
+grant select, insert, update, delete on public.jogos     to anon, authenticated, service_role;
+grant select, insert, update, delete on public.presencas to anon, authenticated, service_role;
+grant select, insert, update, delete on public.caixa     to anon, authenticated, service_role;
+grant select, insert, update, delete on public.pagamentos to anon, authenticated, service_role;
+grant select, insert, update, delete on public.membros   to anon, authenticated, service_role;
+
+grant usage, select on all sequences in schema public to anon, authenticated, service_role;

@@ -21,6 +21,7 @@ type PresenceMeta = {
 type PresenceRowState = {
   jogador_id: number;
   nome: string;
+  tipo: "mensalista" | "diarista";
   presente: boolean;
   gols: number;
   assistencias: number;
@@ -144,6 +145,7 @@ const PresencePage = () => {
       return {
         jogador_id: player.id,
         nome: player.nome,
+        tipo: player.tipo ?? "mensalista",
         presente: existing?.presente ?? false,
         gols: existing?.gols ?? 0,
         assistencias: existing?.assistencias ?? 0,
@@ -369,7 +371,16 @@ const PresencePage = () => {
                 const edited = editedRows[row.jogador_id] ?? row;
                 return (
                   <tr key={row.jogador_id} className="border-b border-border/40">
-                    <td className="py-2">{row.nome}</td>
+                    <td className="py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span>{row.nome}</span>
+                        {row.tipo === "diarista" ? (
+                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-medium w-fit">Diarista</span>
+                        ) : (
+                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-400 font-medium w-fit">Mensalista</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-2">
                       <input
                         disabled={!canManage}

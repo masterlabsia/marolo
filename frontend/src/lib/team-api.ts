@@ -37,7 +37,7 @@ export async function listJogadores(perfilId: number) {
 
 export async function createJogador(
   perfilId: number,
-  payload: Pick<Jogador, "nome" | "posicao" | "numero_camisa" | "telefone" | "email" | "tags">,
+  payload: Pick<Jogador, "nome" | "posicao" | "numero_camisa" | "telefone" | "email" | "tags" | "tipo">,
 ) {
   const { data, error } = await supabase
     .from("jogadores")
