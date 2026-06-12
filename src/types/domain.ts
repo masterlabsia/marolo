@@ -1,4 +1,4 @@
-export type Papel = "admin" | "jogador";
+export type Papel = "admin" | "jogador" | "diarista";
 
 export interface Perfil {
   id: number;

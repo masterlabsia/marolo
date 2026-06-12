@@ -12,11 +12,40 @@ npm run lint         # ESLint
 npm run test         # Vitest (single run)
 npm run test:watch   # Vitest (watch mode)
 
-# Backend (Node/Express — separate process)
-cd backend && npm install && node src/server.js
+# Banco local (Supabase CLI via Docker)
+npm run db:start     # sobe containers locais (postgres, auth, storage…)
+npm run db:stop      # para os containers
+npm run db:reset     # recria o schema + executa seed.sql
+npm run db:status    # exibe URLs e chaves do ambiente local
+
+# Backend (Node/Express — separado, não consumido pelo frontend)
+cd backend && npm install && npm run dev
 ```
 
 Tests live in `src/**/*.{test,spec}.{ts,tsx}` and use jsdom + @testing-library/react. The `@` alias resolves to `./src/`.
+
+## Desenvolvimento local com banco local
+
+Para desenvolver desconectado do Supabase cloud:
+
+```bash
+npm run db:start          # 1. sobe containers (~1 min na primeira vez)
+npm run db:status         # 2. copia a "anon key" exibida
+# 3. edite .env.local:
+#    VITE_SUPABASE_URL=http://localhost:54321
+#    VITE_SUPABASE_ANON_KEY=<anon key do db:status>
+npm run dev               # 4. frontend na porta 3080 apontando pro banco local
+```
+
+Para resetar o banco e recarregar dados de teste (`supabase/seed.sql`):
+```bash
+npm run db:reset
+```
+
+Migrations ficam em `supabase/migrations/` — cada arquivo é executado em ordem pelo `db:reset`. Para criar uma nova migration:
+```bash
+npx supabase migration new nome_da_migration
+```
 
 ## Architecture
 
@@ -31,7 +60,7 @@ src/pages/* → React Query hooks → src/lib/team-api.ts → supabase-js → Su
 - `src/lib/supabase.ts` — single Supabase client; exports `isSupabaseConfigured` to gate operations when env vars are missing.
 - `src/lib/team-api.ts` — all Supabase CRUD calls. Every query is scoped to a `perfil_id` (team), enforcing data isolation per team.
 - `src/hooks/useAuth.tsx` — wraps Supabase Auth in a React Context (`AuthProvider`). Provides `user`, `session`, `loading`, and auth actions.
-- `src/hooks/useProfile.ts` — React Query hook that resolves the current user's `Perfil` (team) and `Papel` (role: `"admin"` | `"jogador"`). Admin = the user whose `usuario_id` matches `perfis.usuario_id`; other users look up `membros` table.
+- `src/hooks/useProfile.ts` — React Query hook that resolves the current user's `Perfil` (team) and `Papel` (role: `"admin"` | `"jogador"` | `"diarista"`). Admin = the user whose `usuario_id` matches `perfis.usuario_id`; other users look up `membros` table.
 - `src/lib/permissions.ts` — thin helper; `canManageRole(role)` returns true only for `"admin"`.
 
 ### Multi-tenancy model
