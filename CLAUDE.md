@@ -135,6 +135,14 @@ The Netlify build runs `scripts/check-supabase-env.cjs` before `vite build` to f
 
 Managed via `supabase/migrations/`. The initial schema creates tables (`perfis`, `jogadores`, `jogos`, `membros`, `caixa`, `pagamentos`, `presencas`) with RLS policies and grants explícitos para `anon`, `authenticated`, `service_role` (necessário no CLI local — o Supabase cloud aplica automaticamente).
 
+## Notebook do desenvolvedor
+
+Conteúdo de aprendizado (comandos, conceitos, referências) fica em `.pxto/` na raiz do projeto, com a nomenclatura `notebook-{contexto}.md`.
+
+Exemplos: `.pxto/notebook-git.md`, `.pxto/notebook-supabase.md`
+
+Quando houver algo relevante para registrar, criar ou atualizar o arquivo correspondente.
+
 ## Security rules
 
 - Never put private keys (Service Role, etc.) in `VITE_` env vars — they are exposed in the final bundle.
