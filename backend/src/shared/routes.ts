@@ -5,6 +5,7 @@ import presencasRouter from "../domains/presencas/shared/routes";
 import pagamentosRouter from "../domains/pagamentos/shared/routes";
 import caixaRouter from "../domains/caixa/shared/routes";
 import statsRouter from "../domains/stats/shared/routes";
+import membrosRouter from "../domains/membros/shared/routes";
 
 export const router = Router();
 
@@ -14,3 +15,4 @@ router.use("/presencas", presencasRouter);
 router.use("/pagamentos", pagamentosRouter);
 router.use("/caixa", caixaRouter);
 router.use("/stats", statsRouter);
+router.use("/membros", membrosRouter);
