@@ -66,6 +66,20 @@ export async function removeJogador(id: number) {
   if (error) throw error;
 }
 
+export async function uploadFotoJogador(perfilId: number, jogadorId: number, file: File): Promise<string> {
+  const ext = file.name.split(".").pop();
+  const path = `${perfilId}/${jogadorId}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("jogadores-fotos")
+    .upload(path, file, { upsert: true });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from("jogadores-fotos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function listJogos(perfilId: number) {
   const { data, error } = await supabase
     .from("jogos")

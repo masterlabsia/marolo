@@ -21,6 +21,7 @@ export interface Jogador {
   tags: string[] | null;
   ativo: boolean;
   tipo: "mensalista" | "diarista";
+  foto_url: string | null;
 }
 
 export interface Jogo {

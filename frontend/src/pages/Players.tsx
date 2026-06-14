@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import AppShell from "@/components/Layout/AppShell";
 import { useProfile } from "@/hooks/useProfile";
 import { canManageRole } from "@/lib/permissions";
-import { createJogador, listJogadores, removeJogador, updateJogador } from "@/lib/team-api";
+import { createJogador, listJogadores, removeJogador, updateJogador, uploadFotoJogador } from "@/lib/team-api";
 import type { Jogador } from "@/types/domain";
 
 const emptyForm = {
@@ -32,6 +32,7 @@ const PlayersPage = () => {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
 
   const playersQuery = useQuery({
     queryKey: ["players", perfilId],
@@ -51,7 +52,12 @@ const PlayersPage = () => {
       };
 
       if (editingId) {
-        return updateJogador(editingId, payload as Partial<Jogador>);
+        const jogador = await updateJogador(editingId, payload as Partial<Jogador>);
+        if (fotoFile && form.tipo === "mensalista") {
+          const url = await uploadFotoJogador(perfilId, editingId, fotoFile);
+          await updateJogador(editingId, { foto_url: url });
+        }
+        return jogador;
       }
 
       return createJogador(perfilId, payload);
@@ -60,6 +66,7 @@ const PlayersPage = () => {
       toast.success(editingId ? "Jogador atualizado" : "Jogador criado");
       setForm(emptyForm);
       setEditingId(null);
+      setFotoFile(null);
       await queryClient.invalidateQueries({ queryKey: ["players", perfilId] });
     },
     onError: (error: any) => toast.error(error.message || "Falha ao salvar jogador"),
@@ -124,12 +131,23 @@ const PlayersPage = () => {
                 </label>
               </div>
             </div>
+            {editingId && form.tipo === "mensalista" && (
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground block mb-1">Foto</label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => setFotoFile(e.target.files?.[0] ?? null)}
+                  className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-muted/40 file:px-3 file:py-1.5 file:text-sm"
+                />
+              </div>
+            )}
             <div className="md:col-span-2 flex gap-2">
               <button type="submit" className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm">
                 {upsertMutation.isPending ? "Salvando..." : editingId ? "Atualizar" : "Criar"}
               </button>
               {editingId && (
-                <button type="button" onClick={() => { setEditingId(null); setForm(emptyForm); }} className="rounded-xl bg-muted/40 px-4 py-2.5 text-sm">
+                <button type="button" onClick={() => { setEditingId(null); setForm(emptyForm); setFotoFile(null); }} className="rounded-xl bg-muted/40 px-4 py-2.5 text-sm">
                   Cancelar
                 </button>
               )}
@@ -148,6 +166,7 @@ const PlayersPage = () => {
           <table className="w-full text-sm">
             <thead className="border-b border-border/60 text-muted-foreground">
               <tr>
+                <th className="w-10 py-2"></th>
                 <th className="text-left py-2">Nome</th>
                 <th className="text-left py-2">Tipo</th>
                 <th className="text-left py-2">Posicao</th>
@@ -159,6 +178,13 @@ const PlayersPage = () => {
             <tbody>
               {rows.map((player) => (
                 <tr key={player.id} className="border-b border-border/40">
+                  <td className="py-2">
+                    {player.tipo === "mensalista" && (
+                      player.foto_url
+                        ? <img src={player.foto_url} alt={player.nome} className="w-8 h-8 rounded-full object-cover" />
+                        : <div className="w-8 h-8 rounded-full bg-muted/60 flex items-center justify-center text-xs font-medium text-muted-foreground">{player.nome.charAt(0).toUpperCase()}</div>
+                    )}
+                  </td>
                   <td className="py-2">{player.nome}</td>
                   <td className="py-2">
                     <TipoBadge tipo={player.tipo ?? "mensalista"} />
