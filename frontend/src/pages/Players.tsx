@@ -137,7 +137,15 @@ const PlayersPage = () => {
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => setFotoFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (file && file.size > 2 * 1024 * 1024) {
+                      toast.error("Imagem muito grande. Máximo 2 MB.");
+                      e.target.value = "";
+                      return;
+                    }
+                    setFotoFile(file);
+                  }}
                   className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-muted/40 file:px-3 file:py-1.5 file:text-sm"
                 />
               </div>

@@ -35,6 +35,27 @@ cd backend && npm install && npm run dev
 
 Tests live in `frontend/src/**/*.{test,spec}.{ts,tsx}` and use jsdom + @testing-library/react. The `@` alias resolves to `./src/`.
 
+```bash
+# Backend (rodar de dentro de backend/)
+cd backend
+npm test           # Jest (single run)
+npm run test:watch
+```
+
+Backend tests live at `backend/src/domains/{domain}/shared/services.test.ts` — same folder as the file under test. Use Jest + `jest.mock` to mock the Repository. One `describe` block per service file, one `it` per function. Example pattern from `jogadores/shared/services.test.ts`:
+
+```ts
+jest.mock("../JogadorRepository", () => ({ JogadorRepository: { find: jest.fn(), ... } }));
+
+describe("jogadores/services", () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it("listJogadores retorna jogadores ordenados por nome", async () => { ... });
+});
+```
+
+Only test `services.ts` — controllers and routes are thin wiring and don't need unit tests.
+
 ## Desenvolvimento local com banco local
 
 Para desenvolver desconectado do Supabase cloud:
