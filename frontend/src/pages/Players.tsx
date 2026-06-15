@@ -201,6 +201,9 @@ const PlayersPage = () => {
                   <td className="py-2">{player.numero_camisa || "-"}</td>
                   <td className="py-2">{(player.tags || []).join(", ") || "-"}</td>
                   <td className="py-2 text-right">
+                    <Link to={`/jogadores/${player.id}/stats`} className="text-xs px-2 py-1 rounded-lg bg-primary/20 text-primary mr-1 inline-block">
+                      Stats
+                    </Link>
                     <Link to={`/jogadores/${player.id}`} className="text-xs px-2 py-1 rounded-lg bg-muted/40 mr-1 inline-block">
                       Timeline
                     </Link>

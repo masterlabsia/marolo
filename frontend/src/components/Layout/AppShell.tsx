@@ -1,13 +1,22 @@
 import Header from "@/components/Layout/Header";
+import SidebarNav from "@/components/Layout/SidebarNav";
 import BottomNav from "@/components/Layout/BottomNav";
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="min-h-screen bg-transparent pb-24 md:pb-8">
+    <div className="min-h-screen bg-transparent">
+      {/* Desktop sidebar (hidden on mobile) */}
+      <SidebarNav />
+
+      {/* Mobile-only top header */}
       <Header />
-      <main className="relative z-10 px-4 md:px-6 py-7 md:py-8 max-w-7xl mx-auto">
+
+      {/* Main content — offset by sidebar width on desktop */}
+      <main className="relative z-10 px-4 md:px-8 py-7 md:py-8 pb-24 md:pb-8 md:ml-56">
         {children}
       </main>
+
+      {/* Mobile bottom nav */}
       <BottomNav />
     </div>
   );
