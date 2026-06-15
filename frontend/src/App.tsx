@@ -16,6 +16,7 @@ import CashPage from "@/pages/Cash";
 import StatsPage from "@/pages/Stats";
 import ReportsPage from "@/pages/Reports";
 import PlayerTimelinePage from "@/pages/PlayerTimeline";
+import PlayerStatsPage from "@/pages/PlayerStats";
 import AuthLoginPage from "@/pages/AuthLogin";
 import NotFound from "@/pages/NotFound";
 
@@ -50,6 +51,7 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/jogadores" element={<PlayersPage />} />
                   <Route path="/jogadores/:playerId" element={<PlayerTimelinePage />} />
+                  <Route path="/jogadores/:playerId/stats" element={<PlayerStatsPage />} />
                   <Route path="/jogos" element={<GamesPage />} />
                   <Route path="/presenca" element={<PresencePage />} />
                   <Route path="/pagamentos" element={<PaymentsPage />} />
